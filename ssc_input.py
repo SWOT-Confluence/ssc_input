@@ -93,7 +93,7 @@ def find_hls_tiles(line_geo=False, band=False, limit=False, collections = ['HLSL
 
                 try:
                     search = catalog.search(
-                        collections=collections, intersects = line_geo)
+                        collections=collections, intersects = line_geo, datetime = i.replace(',', '/'))
                 except e:
                     print('here is the fail', e)
 
@@ -344,7 +344,7 @@ def get_args():
                         help='Temporal range to search for tiles',
                         metavar='str',
                         type=str,
-                        default="2020-01-01T00:00:00Z,2025-04-25T23:59:59Z")
+                        default="2022-12-12T00:00:00Z,2025-04-25T23:59:59Z")
     parser.add_argument('-o',
                         '--outdir',
                         help='output directory',
