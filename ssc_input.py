@@ -15,23 +15,30 @@ import shutil
 import sys
 import glob
 import subprocess
-from multiprocessing import Pool, Manager
+from multiprocessing import Pool, Manager, cpu_count
 import json
 from pystac_client import Client  
 import geopandas as gpd
 import os
 import numpy as np
 import pandas as pd
-from shapely.geometry import Point, LineString, shape
+from shapely.geometry import Point, LineString, shape, mapping
 from itertools import repeat
 import netCDF4 as ncf
 from itertools import chain
 from datetime import datetime
 from datetime import timedelta
 import tqdm
+from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from itertools import repeat
+from typing import List, Tuple
+import functools
+print = functools.partial(print, flush=True)
 
 from random import randint
 from time import sleep
+import time
 
 
 def generate_time_search(timekey):
@@ -69,137 +76,161 @@ def generate_time_search(timekey):
         return parsed_dates
 # find hls tiles given a point
 
-def find_hls_tiles(line_geo=False, band=False, limit=False, collections = ['HLSL30.v2.0', 'HLSS30.v2.0'], date_range = False):
+def find_hls_tiles(date_range = False, sword_path = False, cont = False,reach_id=False, collections = ['HLSL30.v2.0', 'HLSS30.v2.0']):
 
     STAC_URL = 'https://cmr.earthdata.nasa.gov/stac'
 
 
-    catalog = Client.open(f'{STAC_URL}/LPCLOUD/')
+
+    
+    
+    ## NEW APPROACH
+    tries = 20
+    tries_cnt = 0
+    links = []
+    success = False
+    for i in range(tries):
+        print('proceessing', reach_id)
+        try:
+            # sleep(randint(1,60))
+            line_geo = get_reach_node_cords(sword_path,reach_id, cont)
+            tries_cnt += 1
+            catalog = Client.open(f'{STAC_URL}/LPCLOUD/')
+            search = catalog.search(
+            collections=collections,
+            intersects=line_geo,
+            datetime = date_range.replace(',', '/')
+            # limit=1000  # optional, just sets page size
+            )
+            links = []
+            all_items = search.items()
 
 
-    if date_range == False:
-# ['2020-01-01:00:00:00Z', '..']
-        # search = catalog.search(
-        #     collections=collections, intersects = line_geo, datetime=date_range.replace(',', '/'))
-        raise ValueError('Please supply a date for ssc...')
-    else:
-        all_temporal_ranges = generate_time_search(date_range)
-        links = []
-        # all_temporal_ranges = ['1']
-        for i in all_temporal_ranges:
-            try:
-                # search = catalog.search(
-                #     collections=collections, intersects = line_geo, datetime=i.replace(',', '/'))
+            for i in all_items:
+            # print(i, list(i.keys()))
+                i = i.to_dict()
+                for key in i['assets']:
+                    # print(key)
+                    if key.startswith('B'):
+                        # link = i.assets[key].href.replace('https://data.lpdaac.earthdatacloud.nasa.gov/', 's3://')
+                        link = i['assets'][key]['href']
 
-                try:
-                    search = catalog.search(
-                        collections=collections, intersects = line_geo, datetime = i.replace(',', '/'))
-                except e:
-                    print('here is the fail', e)
-
-                item_collection = search.items_as_dicts()
-
-
-                if limit:
-                    item_collection = item_collection[:limit]
-                # print(list(item_collection[0].keys()))
-
-                if band:
-                    if type(band) == list:
-                        for i in item_collection:
-                            for b in band:
-                                link = i['assets'][band]['href']
-                                links.append(link)
-                    
-                    else:
-                        for i in item_collection:
-                            link = i['assets'][band]['href']
-                            links.append(link)
+                        links.append(link)
                 
-                else:
-                    for i in item_collection:
-                        # print(i, list(i.keys()))
-                        for key in i['assets']:
-                            # print(key)
-                            if key.startswith('B'):
-                                # link = i.assets[key].href.replace('https://data.lpdaac.earthdatacloud.nasa.gov/', 's3://')
-                                link = i['assets'][key]['href']
 
-                                links.append(link)
-            except:
-                continue 
+                
+            print(reach_id, 'succeeded after', tries_cnt, 'tries')
+            print('example link from geo...',list(set([os.path.basename(a_link).split('.')[2] for a_link in links])))
+            success = True
+            break
+        except Exception as e:
+            er = e
+            sleep(randint(1,20))
+            if 'rate' in str(e):
+                sleep(randint(1, 120))
+            print(reach_id, 'failed', 'error:', e, tries_cnt)
+    
+    if not success:
+        try:
+            links.append(f"failed,error: {e}")
+        except:
+            links.append('failed with no error')
+    return list(set(links))
 
-        return list(set(links))
+
 
 def find_download_links_for_reach_tiles(sword_path, reach_id, cont, temporal_range):
-
-    lat_list, lon_list = get_reach_node_cords(sword_path,reach_id, cont)
-    # print(lat_list)
-    df = pd.DataFrame(columns=['x', 'y'])
-    # df['x'] = lat_list
-    # df['y'] = lon_list
-    geometry_chunks = [Point(xy) for xy in zip(lat_list, lon_list)]
-    # geometry_chunks =  [ geometry[i:i+10] for i in range(0,len(geometry),10) ]
-    # if len(geometry_chunks[-1]) == 1:
-    #     geometry_chunks[-2].extend(geometry_chunks[-1])
-    #     geometry_chunks.pop(-1)
     
-    all_links = []
-    fail_count = 0
-    success_count = 0
-    errors = []
-    cnt = 0
-    for geometry in geometry_chunks:
-        # print(reach_id,':','Processing node ', cnt, 'of', len(geometry_chunks))
-        cnt += 1
-        # print(geometry)
-        line_geo = geometry
-        # geo_df = gpd.GeoDataFrame( geometry=geometry)
-        # geo_df['ID'] = reach_id
+    
+    
 
-        # if len(geo_df) != 0:
-            # geo_df2 = geo_df.groupby(['ID'])['geometry'].apply(lambda x: LineString(x.tolist()))
-            # geo_df2 = gpd.GeoDataFrame(geo_df2, geometry='geometry')
-            # line_geo = list(geo_df2.geometry.unique())[0]
-            # print(line_geo)
-        attempt_number = 5
-        # sleep(randint(10,100))
-        for attempt in range(attempt_number):
-            try:
-                # if len(geo_df2)!=0:
-                links = find_hls_tiles(line_geo=line_geo, date_range=temporal_range)
-                all_links.extend(links)
-                success_count += 1
-                # print(reach_id, f'chunk {cnt} succeeded')
-                # print(reach_id, 'found', len(all_links), 'so far...')
-                break
-            except Exception as e:
-                # all_links.extend(['foo'])
-                fail_count += 1
-                errors.append(e)
-                
-                sleep(randint(10,100))
-                continue
-            else:
-                break
-    # print('got it', all_links)
+    # df = pd.DataFrame(columns=['x', 'y'])
+    # geometry_chunks = [Point(xy) for xy in zip(lat_list, lon_list)]
+
+    # # Create a LineString
+    # line = LineString(zip(lat_list, lon_list))
+
+    # Convert to GeoJSON-like dict for STAC search
+    # line_geojson = mapping(line)
+    
+
+    all_links = find_hls_tiles(sword_path=sword_path, cont = cont, date_range=temporal_range, reach_id=reach_id)
+
     all_links = list(set(all_links))
     out_data = {reach_id:all_links}
-    return all_links,out_data, success_count, fail_count, errors
+    
+    print('finished searching for ', reach_id, 'found', len(all_links), 'tiles...')
+    return out_data
+    
+    
+    
+    
+    
 
+    # line_geojson = get_reach_node_cords(sword_path,reach_id, cont)
+    # # df = pd.DataFrame(columns=['x', 'y'])
+    # # geometry_chunks = [Point(xy) for xy in zip(lat_list, lon_list)]
 
+    # # # Create a LineString
+    # # line = LineString(zip(lat_list, lon_list))
+
+    # # Convert to GeoJSON-like dict for STAC search
+    # # line_geojson = mapping(line)
+    
+    # all_links = []
+    # if type(line_geojson) != str:
+    #     links = find_hls_tiles(line_geo=line_geojson, date_range=temporal_range, reach_id=reach_id)
+    # else:
+    #     # there was an error pulling the reach_node coords, save it as an error
+    #     links = [line_geojson]
+    # all_links.extend(list(set(links)))
+
+    # all_links = list(set(all_links))
+    # out_data = {reach_id:all_links}
+    
+    # print('finished searching for ', reach_id, 'found', len(all_links), 'tiles...')
+    # return out_data
+
+def get_five_points(lat_list, lon_list):
+    n = len(lat_list)
+    if n < 3:
+        return "error, reach must have at least 3 points"
+
+    first_idx = 0
+    last_idx = n - 1
+    mid_idx = n // 2
+    mid_start_idx = (first_idx + mid_idx) // 2
+    mid_end_idx = (mid_idx + last_idx) // 2
+
+    points = [
+        (lat_list[first_idx], lon_list[first_idx]),      # First
+        (lat_list[mid_start_idx], lon_list[mid_start_idx]),  # Between start and middle
+        (lat_list[mid_idx], lon_list[mid_idx]),          # Middle
+        (lat_list[mid_end_idx], lon_list[mid_end_idx]),  # Between middle and end
+        (lat_list[last_idx], lon_list[last_idx])         # Last
+    ]
+    
+    # # Create a LineString
+    line = LineString(points)
+
+    # Convert to GeoJSON-like dict for STAC search
+    line_geojson = mapping(line)
+
+    return line_geojson
 
 
 
 def get_reach_node_cords(sword_path, reach_id, cont):
 
     lat_list, lon_list = [], []
-
-    # sword_fp = os.path.join(sword_path, f'{cont.lower()}_sword_v15.nc')
-
-     
-    
-    rootgrp = ncf.Dataset(sword_path, "r", format="NETCDF4")
+    tries = 20
+    for i in range(tries):
+        try:
+            rootgrp = ncf.Dataset(sword_path, "r", format="NETCDF4")
+            break
+        except:
+            sleep(randint(1,20))
+            pass
     
     node_ids_indexes = np.where(rootgrp.groups['nodes'].variables['reach_id'][:].data.astype('U') == str(reach_id))
 
@@ -213,100 +244,48 @@ def get_reach_node_cords(sword_path, reach_id, cont):
             lon_list.append(lon)
 
 
-        rootgrp.close()
-    return [lat_list[0], lat_list[-1]], [lon_list[0], lon_list[-1]]
+    rootgrp.close()
+    return get_five_points(lat_list, lon_list)
 
-def find_download_links_with_progress(*args):
-    result = find_download_links_for_reach_tiles(*args[:-1])  # Your original function logic here
-    args[-1].increment()  # Update the shared counter
+
+
+
+
+
+def ssc_process_continent(reach_ids, cont, sword_path, temporal_range):
+
+
+## old
+    input_vars = zip(repeat(sword_path), reach_ids, repeat(cont), repeat(temporal_range))
+    print(reach_ids[:2])
+    print('starting workers...')
+    pool = Pool(processes=len(reach_ids))              # start 4 worker processes
+    result = pool.starmap(find_download_links_for_reach_tiles, input_vars )
+
+
+    inverted = defaultdict(list)
+    for i in result:
+        for reach_id, links in i.items():
+            for link in links:
+                inverted[link].append(reach_id)
+
+    # Convert defaultdict to regular dict (optional)
+    result = dict(inverted)
+
+    # pool.close()
     return result
 
-class Counter:
-    def __init__(self):
-        self.count = 0
-
-    def increment(self):
-        self.count += 1
-
-
-
-
-
-def ssc_process_continent(reach_ids, cont, sword_path, temporal_range, progress_bar_bool):
-
-    input_vars = zip(repeat(sword_path), reach_ids, repeat(cont), repeat(temporal_range))
-
-    if progress_bar_bool:
-        with Manager() as manager:
-            counter = manager.Namespace()  # Use a namespace to store the shared counter
-            counter.count = 0
-
-            def update_progress_bar(counter):
-                # This function will be used to update the progress bar
-                with tqdm.tqdm(total=len(reach_ids)) as pbar:
-                    while counter.count < len(reach_ids):
-                        pbar.n = counter.count  # Update progress bar
-                        pbar.refresh()  # Force an update of the display
-                        sleep(0.1)  # Small delay to reduce CPU usage
-
-            with Pool(8) as pool:
-                # Start the progress bar updater in a separate thread
-                from threading import Thread
-                progress_thread = Thread(target=update_progress_bar, args=(counter,))
-                progress_thread.start()
-
-                # Process the tasks
-                input_with_counter = [(*input_var, counter) for input_var in input_vars]
-                result = pool.starmap(find_download_links_with_progress, input_with_counter)
-
-                progress_thread.join()  # Ensure progress thread finishes
-
-    # input_vars = zip(repeat(sword_path), reach_ids, repeat(cont), repeat(temporal_range))
-
-    # if progress_bar_bool:
-
-    #     # pool = Pool(processes=4)
-    #     # mapped_values = list(tqdm.tqdm(pool.imap_unordered(find_download_links_for_reach_tiles, input_vars), total=len(reach_ids)))
-
-    #     with Pool(8) as pool:
-    #         result = pool.starmap(find_download_links_for_reach_tiles, tqdm.tqdm(input_vars, total=len(reach_ids)))
-    
-    else:
-        pool = Pool(processes=8)              # start 4 worker processes
-        result = pool.starmap(find_download_links_for_reach_tiles, input_vars )
-    links = []
-    out_data = []
-    fail_count = 0
-    success_count = 0 
-    errors = []
-        # return list(set(all_links)), success_count, fail_count, errors
-    for i in result:
-        links.extend(i[0])
-        out_data.append([i[1]])
-        success_count += i[2]
-        fail_count += i[3]
-        errors.extend(i[4])
-
-
-    pool.close()
-    print(f'{fail_count} chunks failed.')
-    print('Here are some sample errors', errors)
-    print('here are some example links',links[:10])
-    # flatten_list = list(chain.from_iterable(links))
-    # print('flattened list 1', flatten_list[:10])
-    # flatten_list = list(set(flatten_list))
-    # print('set flattened list', flatten_list)
-    # no_bands = list(set([i[:-10] for i in flatten_list]))
-    # print('nobands',no_bands[:10])
-    print(f'Found {len(links)} scenes for {cont}...')
-    return out_data
-
-def get_reach_ids(cont_number:list, indir:str):
+def get_reach_ids(cont_number:list, indir:str, run_globe:bool, sword_path:str):
     # reach_ids = [print(os.path.basename(i).split('_')[0]) for i in glob.glob(os.path.join(indir, 'swot','*'))\
         #  if os.path.basename(i)[0] in cont_number]
-    all_reach_ids =glob.glob(os.path.join(indir, 'swot','*'))
-    reach_ids = [os.path.basename(i).split('_')[0] for i in all_reach_ids if int(os.path.basename(i)[0]) in cont_number]
- 
+    if not run_globe:
+        all_reach_ids =glob.glob(os.path.join(indir, 'swot','*'))
+        reach_ids = [os.path.basename(i).split('_')[0] for i in all_reach_ids if int(os.path.basename(i)[0]) in cont_number]
+    else:
+        sword_data = ncf.Dataset(sword_path)
+        reach_ids = [str(i) for i in sword_data['reaches']['reach_id'][:] if str(i)[-1] == '1']
+        sword_data.close()
+        
     return reach_ids
 
 def get_cont_info(index:int, indir:str):
@@ -344,46 +323,72 @@ def get_args():
                         help='Temporal range to search for tiles',
                         metavar='str',
                         type=str,
-                        default="2022-12-12T00:00:00Z,2025-04-25T23:59:59Z")
+                        default="2023-03-31T00:00:00Z,2025-04-03T23:59:59Z")
+
     parser.add_argument('-o',
                         '--outdir',
                         help='output directory',
                         metavar='str',
                         type=str,
-                        default= '/mnt/input')
+                        default= '/data/input')
     
-    parser.add_argument('-p',
-                    '--progress_bar',
-                    help='Add progress bar',
+    parser.add_argument('-g',
+                    '--run_globe',
+                    help='run the globe, do not use swot data inputs',
                     action='store_true',
                     default=False)
+    
+    parser.add_argument('-s',
+                    '--starting_chunk',
+                    help='What chunk to pick up at',
+                    type=int,
+                    default=0)
 
 
     return parser.parse_args()
-
+print('running...')
 def main():
     """Make a jazz noise here"""
     args = get_args() 
-    indir = '/mnt/input'
+    indir = '/data/input'
     outdir = args.outdir
     index = args.index
     temporal_range = args.temporal_range
-    progress_bar_bool = args.progress_bar
-    cont, cont_number = get_cont_info(index = index, indir = indir)
-    sword_path = os.path.join(indir, 'sword', f'{cont}_sword_v16_patch.nc')
-    reach_ids = get_reach_ids(cont_number = cont_number, indir=indir)
-    # reach_ids = [74299800431, 74268900211, 74286300021, 78220000121, 74299800441, 74268900221, 74286300031, 78220000131, 74299800451, 74286300041, 74299800461, 78220000141, 74268900241, 74286300051, 73214000021, 74299800471, 78220000151, 74268900251, 74286300061, 73214000031, 74299800481, 78220000161, 74286300071, 74268900271, 74286300081, 73214000051, 74268900281, 73214000061]  
+    run_globe = args.run_globe
+    starting_chunk = args.starting_chunk
     
-    rid_chunks =  [ reach_ids[i:i+10] for i in range(0,len(reach_ids),50) ]
-    chunk_num = 0
-    if len(rid_chunks[-1]) == 1:
-        rid_chunks[-2].extend(rid_chunks[-1])
-        rid_chunks.pop(-1)
-    for rid_chunk in rid_chunks:
-        print('processing chunk', chunk_num, 'of', len(rid_chunks))
-        bands = ssc_process_continent(rid_chunk, cont, sword_path, temporal_range, progress_bar_bool)
-        write_json(bands, os.path.join(outdir, f'{cont}_hls_list_{chunk_num}.json'))
-        chunk_num += 1
+    if index == -235:
+        index = int(os.environ.get("AWS_BATCH_JOB_ARRAY_INDEX"))
+    
+    print('here is index', index)
+    for index in range(7):
+
+        cont, cont_number = get_cont_info(index = index, indir = indir)
+        print('processing', cont)
+        sword_path = os.path.join(indir, 'sword', f'{cont}_sword_v16_patch.nc')
+        reach_ids = get_reach_ids(cont_number = cont_number, indir=indir, run_globe=run_globe, sword_path=sword_path)
+        
+        rid_chunks =  [ reach_ids[i:i+50] for i in range(0,len(reach_ids),50) ]
+        # rid_chunks = rid_chunks[305:]
+        
+        chunk_num = starting_chunk
+        rid_chunks = rid_chunks[chunk_num:]
+        
+        if len(rid_chunks[-1]) == 1:
+            rid_chunks[-2].extend(rid_chunks[-1])
+            rid_chunks.pop(-1)
+        for rid_chunk in rid_chunks:
+            start_time = time.time()
+            print('processing chunk', chunk_num, 'of', len(rid_chunks))
+            bands = ssc_process_continent(rid_chunk, cont, sword_path, temporal_range)
+
+
+            chunk_num += 1
+            end_time = time.time()
+            print(f"Execution time: {end_time - start_time:.4f} seconds to process chunk")
+            write_json(bands, os.path.join(outdir, f'{cont}_hls_list_chunk_{chunk_num}_time_{int(end_time - start_time)}.json'))
+        print("All chunks processed — script completed.")
+              
 # --------------------------------------------------
 if __name__ == '__main__':
     main()
