@@ -316,6 +316,7 @@ def get_args():
                         help='index of continent to process',
                         metavar='int',
                         type=int,
+                        default=-235
                         )
 
     parser.add_argument('-t',
@@ -323,7 +324,7 @@ def get_args():
                         help='Temporal range to search for tiles',
                         metavar='str',
                         type=str,
-                        default="2023-03-31T00:00:00Z,2025-04-03T23:59:59Z")
+                        default="2023-03-31T00:00:00Z,2026-12-12T23:59:59Z")
 
     parser.add_argument('-o',
                         '--outdir',
@@ -357,11 +358,15 @@ def main():
     run_globe = args.run_globe
     starting_chunk = args.starting_chunk
     
-    if index == -235:
-        index = int(os.environ.get("AWS_BATCH_JOB_ARRAY_INDEX"))
+    if index == -235 or None:
+        # index = int(os.environ.get("AWS_BATCH_JOB_ARRAY_INDEX"))
+        index_range = range(0,8)
     
+    else:
+        index_range = range(index, index+1)
+        
     print('here is index', index)
-    for index in range(7):
+    for index in index_range:
 
         cont, cont_number = get_cont_info(index = index, indir = indir)
         print('processing', cont)
