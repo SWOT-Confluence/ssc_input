@@ -286,7 +286,7 @@ def get_reach_ids(cont_number:list, indir:str, run_globe:bool, sword_path:str):
     # reach_ids = [logging.info(os.path.basename(i).split('_')[0]) for i in glob.glob(os.path.join(indir, 'swot','*'))\
         #  if os.path.basename(i)[0] in cont_number]
     if not run_globe:
-        all_reach_ids =glob.glob(os.path.join(indir, 'swot','*'))
+        all_reach_ids =glob.glob(os.path.join(indir, 'swot','*SWOT.nc'))
         reach_ids = [os.path.basename(i).split('_')[0] for i in all_reach_ids if int(os.path.basename(i)[0]) in cont_number]
     else:
         sword_data = ncf.Dataset(sword_path)
