@@ -387,6 +387,8 @@ def main():
         cont, cont_number = get_cont_info(index = index, indir = indir)
         logging.info('processing %s', cont)
         sword_path = os.path.join(indir, 'sword', f'{cont}_sword_v16_patch.nc')
+        if not os.path.exists(sword_path):
+            sword_path = os.path.join(indir, 'sword', f'{cont}_sword_v16.nc')
         reach_ids = get_reach_ids(cont_number = cont_number, indir=indir, run_globe=run_globe, sword_path=sword_path)
         
         rid_chunks =  [ reach_ids[i:i+50] for i in range(0,len(reach_ids),50) ]
