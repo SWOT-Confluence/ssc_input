@@ -333,6 +333,13 @@ def get_args():
                         type=str,
                         default="2023-03-31T00:00:00Z,2026-12-12T23:59:59Z")
 
+    parser.add_argument('-n',
+                        '--indir',
+                        help='input directory',
+                        metavar='str',
+                        type=str,
+                        default= '/data/input')
+
     parser.add_argument('-o',
                         '--outdir',
                         help='output directory',
@@ -358,15 +365,15 @@ logging.info('running...')
 def main():
     """Make a jazz noise here"""
     args = get_args() 
-    indir = '/data/input'
-    indir='/Users/tebaldi/Documents/workspace/confluence/data/modules/ssc_input/input'
+    indir = args.indir
     outdir = args.outdir
-    outdir = '/Users/tebaldi/Documents/workspace/confluence/data/modules/ssc_input/ssc'
     index = args.index
     temporal_range = args.temporal_range
     run_globe = args.run_globe
     starting_chunk = args.starting_chunk
-    
+    for arg, val in args.__dict__.items():
+        logging.info("%s: %s", arg, val)
+
     if index == -235 or None:
         # index = int(os.environ.get("AWS_BATCH_JOB_ARRAY_INDEX"))
         index_range = range(0,8)
