@@ -8,6 +8,7 @@ Purpose: Rock the Casbah
 
 # python3 prepare.py -i /home/u24/travissimmons/cjx/season10/50_hand_label_test_2020_03_02 -o /home/u24/travissimmons/cjx/season10/gifs
 # makeflow process.makeflow -j 1
+import logging
 import traceback
 import argparse
 import os
@@ -39,6 +40,12 @@ print = functools.partial(print, flush=True)
 from random import randint
 from time import sleep
 import time
+
+
+logging.getLogger().setLevel(logging.INFO)
+logging.basicConfig(format='%(asctime)s,%(msecs)d %(name)s %(levelname)s %(message)s',
+                    datefmt='%Y-%m-%dT%H:%M:%S',
+                    level=logging.INFO)
 
 
 def generate_time_search(timekey):
@@ -90,7 +97,7 @@ def find_hls_tiles(date_range = False, sword_path = False, cont = False,reach_id
     links = []
     success = False
     for i in range(tries):
-        print('proceessing', reach_id)
+        logging.info('proceessing %s', reach_id)
         try:
             # sleep(randint(1,60))
             line_geo = get_reach_node_cords(sword_path,reach_id, cont)
@@ -119,8 +126,8 @@ def find_hls_tiles(date_range = False, sword_path = False, cont = False,reach_id
                 
 
                 
-            print(reach_id, 'succeeded after', tries_cnt, 'tries')
-            print('example link from geo...',list(set([os.path.basename(a_link).split('.')[2] for a_link in links])))
+            logging.info('%s succeeded after %s tries', reach_id, tries_cnt)
+            logging.info('example link from geo...%s',list(set([os.path.basename(a_link).split('.')[2] for a_link in links])))
             success = True
             break
         except Exception as e:
@@ -128,7 +135,7 @@ def find_hls_tiles(date_range = False, sword_path = False, cont = False,reach_id
             sleep(randint(1,20))
             if 'rate' in str(e):
                 sleep(randint(1, 120))
-            print(reach_id, 'failed', 'error:', e, tries_cnt)
+            logging.info('%s failed error: %s', reach_id, e, tries_cnt)
     
     if not success:
         try:
@@ -159,7 +166,7 @@ def find_download_links_for_reach_tiles(sword_path, reach_id, cont, temporal_ran
     all_links = list(set(all_links))
     out_data = {reach_id:all_links}
     
-    print('finished searching for ', reach_id, 'found', len(all_links), 'tiles...')
+    logging.info('finished searching for %s; found %s tiles', reach_id, len(all_links))
     return out_data
     
     
@@ -188,7 +195,7 @@ def find_download_links_for_reach_tiles(sword_path, reach_id, cont, temporal_ran
     # all_links = list(set(all_links))
     # out_data = {reach_id:all_links}
     
-    # print('finished searching for ', reach_id, 'found', len(all_links), 'tiles...')
+    # logging.info('finished searching for ', reach_id, 'found', len(all_links), 'tiles...')
     # return out_data
 
 def get_five_points(lat_list, lon_list):
@@ -257,8 +264,8 @@ def ssc_process_continent(reach_ids, cont, sword_path, temporal_range):
 
 ## old
     input_vars = zip(repeat(sword_path), reach_ids, repeat(cont), repeat(temporal_range))
-    print(reach_ids[:2])
-    print('starting workers...')
+    logging.info(reach_ids[:2])
+    logging.info('starting workers...')
     pool = Pool(processes=len(reach_ids))              # start 4 worker processes
     result = pool.starmap(find_download_links_for_reach_tiles, input_vars )
 
@@ -276,7 +283,7 @@ def ssc_process_continent(reach_ids, cont, sword_path, temporal_range):
     return result
 
 def get_reach_ids(cont_number:list, indir:str, run_globe:bool, sword_path:str):
-    # reach_ids = [print(os.path.basename(i).split('_')[0]) for i in glob.glob(os.path.join(indir, 'swot','*'))\
+    # reach_ids = [logging.info(os.path.basename(i).split('_')[0]) for i in glob.glob(os.path.join(indir, 'swot','*'))\
         #  if os.path.basename(i)[0] in cont_number]
     if not run_globe:
         all_reach_ids =glob.glob(os.path.join(indir, 'swot','*'))
@@ -347,12 +354,14 @@ def get_args():
 
 
     return parser.parse_args()
-print('running...')
+logging.info('running...')
 def main():
     """Make a jazz noise here"""
     args = get_args() 
     indir = '/data/input'
+    indir='/Users/tebaldi/Documents/workspace/confluence/data/modules/ssc_input/input'
     outdir = args.outdir
+    outdir = '/Users/tebaldi/Documents/workspace/confluence/data/modules/ssc_input/ssc'
     index = args.index
     temporal_range = args.temporal_range
     run_globe = args.run_globe
@@ -365,11 +374,11 @@ def main():
     else:
         index_range = range(index, index+1)
         
-    print('here is index', index)
+    logging.info('here is index %s', index)
     for index in index_range:
 
         cont, cont_number = get_cont_info(index = index, indir = indir)
-        print('processing', cont)
+        logging.info('processing %s', cont)
         sword_path = os.path.join(indir, 'sword', f'{cont}_sword_v16_patch.nc')
         reach_ids = get_reach_ids(cont_number = cont_number, indir=indir, run_globe=run_globe, sword_path=sword_path)
         
@@ -378,21 +387,24 @@ def main():
         
         chunk_num = starting_chunk
         rid_chunks = rid_chunks[chunk_num:]
-        
-        if len(rid_chunks[-1]) == 1:
-            rid_chunks[-2].extend(rid_chunks[-1])
-            rid_chunks.pop(-1)
-        for rid_chunk in rid_chunks:
-            start_time = time.time()
-            print('processing chunk', chunk_num, 'of', len(rid_chunks))
-            bands = ssc_process_continent(rid_chunk, cont, sword_path, temporal_range)
+
+        if len(rid_chunks) > 0:
+            if len(rid_chunks[-1]) == 1:
+                rid_chunks[-2].extend(rid_chunks[-1])
+                rid_chunks.pop(-1)
+            for rid_chunk in rid_chunks:
+                start_time = time.time()
+                logging.info('processing chunk %s of %s', chunk_num, len(rid_chunks))
+                bands = ssc_process_continent(rid_chunk, cont, sword_path, temporal_range)
 
 
-            chunk_num += 1
-            end_time = time.time()
-            print(f"Execution time: {end_time - start_time:.4f} seconds to process chunk")
-            write_json(bands, os.path.join(outdir, f'{cont}_hls_list_chunk_{chunk_num}_time_{int(end_time - start_time)}.json'))
-        print("All chunks processed — script completed.")
+                chunk_num += 1
+                end_time = time.time()
+                logging.info(f"Execution time: %s seconds to process chunk", end_time - start_time)
+                write_json(bands, os.path.join(outdir, f'{cont}_hls_list_chunk_{chunk_num}_time_{int(end_time - start_time)}.json'))
+        else:
+            logging.info("No reaches located for continent: %s", cont.upper())
+        logging.info("All chunks processed — script completed.")
               
 # --------------------------------------------------
 if __name__ == '__main__':
