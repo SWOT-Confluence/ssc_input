@@ -113,7 +113,7 @@ def find_hls_tiles(date_range = False, sword_path = False, cont = False,reach_id
             )
             stac_api_io = StacApiIO(max_retries=retry)
             logging.info('Opening stac catalog')
-            catalog = Client.open(f'{STAC_URL}/LPCLOUD/', stac_id=stac_api_io)
+            catalog = Client.open(f'{STAC_URL}/LPCLOUD/', stac_io=stac_api_io)
             logging.info('Searching Catalog')
             search = catalog.search(
             collections=collections,
