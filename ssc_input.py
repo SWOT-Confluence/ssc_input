@@ -18,7 +18,11 @@ import glob
 import subprocess
 from multiprocessing import Pool, Manager, cpu_count
 import json
-from pystac_client import Client  
+from pystac_client import Client
+from requests.adapters import HTTPAdapter
+from urllib3 import Retry
+from pystac_client.stac_api_io import StacApiIO
+
 import geopandas as gpd
 import os
 import numpy as np
@@ -92,7 +96,7 @@ def find_hls_tiles(date_range = False, sword_path = False, cont = False,reach_id
     
     
     ## NEW APPROACH
-    tries = 20
+    tries = 5 # was 20, but we now also retry within the stac catalog code now.
     tries_cnt = 0
     links = []
     success = False
@@ -100,15 +104,24 @@ def find_hls_tiles(date_range = False, sword_path = False, cont = False,reach_id
         logging.info('proceessing %s', reach_id)
         try:
             # sleep(randint(1,60))
+            logging.info('getting reach node coords')
             line_geo = get_reach_node_cords(sword_path,reach_id, cont)
             tries_cnt += 1
-            catalog = Client.open(f'{STAC_URL}/LPCLOUD/', timeout=120)
+
+            retry = Retry(
+              total=5, backoff_factor=1, status_forcelist=[429, 502, 503, 504], allowed_methods=None
+            )
+            stac_api_io = StacApiIO(max_retries=retry)
+            logging.info('Opening stac catalog')
+            catalog = Client.open(f'{STAC_URL}/LPCLOUD/', stac_id=stac_api_io)
+            logging.info('Searching Catalog')
             search = catalog.search(
             collections=collections,
             intersects=line_geo,
             datetime = date_range.replace(',', '/')
             # limit=1000  # optional, just sets page size
             )
+            logging.info('Search complete')
             links = []
             all_items = search.items()
 
@@ -121,7 +134,6 @@ def find_hls_tiles(date_range = False, sword_path = False, cont = False,reach_id
                     if key.startswith('B'):
                         # link = i.assets[key].href.replace('https://data.lpdaac.earthdatacloud.nasa.gov/', 's3://')
                         link = i['assets'][key]['href']
-
                         links.append(link)
                 
 
@@ -132,10 +144,11 @@ def find_hls_tiles(date_range = False, sword_path = False, cont = False,reach_id
             break
         except Exception as e:
             er = e
-            sleep(randint(1,20))
             if 'rate' in str(e):
                 # previously 1,120 2 minutes!!!
                 sleep(randint(5, 15))
+            else:
+                sleep(randint(1,20))
             logging.info('%s failed error: %s, tries: %s', reach_id, e, tries_cnt)
     
     if not success:
