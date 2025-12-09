@@ -134,7 +134,8 @@ def find_hls_tiles(date_range = False, sword_path = False, cont = False,reach_id
             er = e
             sleep(randint(1,20))
             if 'rate' in str(e):
-                sleep(randint(1, 120))
+                # previously 1,120 2 minutes!!!
+                sleep(randint(5, 15))
             logging.info('%s failed error: %s, tries: %s', reach_id, e, tries_cnt)
     
     if not success:
