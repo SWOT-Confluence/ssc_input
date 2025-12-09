@@ -102,7 +102,7 @@ def find_hls_tiles(date_range = False, sword_path = False, cont = False,reach_id
             # sleep(randint(1,60))
             line_geo = get_reach_node_cords(sword_path,reach_id, cont)
             tries_cnt += 1
-            catalog = Client.open(f'{STAC_URL}/LPCLOUD/')
+            catalog = Client.open(f'{STAC_URL}/LPCLOUD/', timeout=120)
             search = catalog.search(
             collections=collections,
             intersects=line_geo,
