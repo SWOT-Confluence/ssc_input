@@ -9,35 +9,35 @@ Purpose: Rock the Casbah
 # python3 prepare.py -i /home/u24/travissimmons/cjx/season10/50_hand_label_test_2020_03_02 -o /home/u24/travissimmons/cjx/season10/gifs
 # makeflow process.makeflow -j 1
 import logging
-import traceback
+#import traceback
 import argparse
 import os
-import shutil
-import sys
+#import shutil
+#import sys
 import glob
-import subprocess
-from multiprocessing import Pool, Manager, cpu_count
+#import subprocess
+#from multiprocessing import Pool, Manager, cpu_count
 import json
 from pystac_client import Client
-from requests.adapters import HTTPAdapter
+#from requests.adapters import HTTPAdapter
 from urllib3 import Retry
 from pystac_client.stac_api_io import StacApiIO
 
-import geopandas as gpd
-import os
+#import geopandas as gpd
+#import os
 import numpy as np
 import pandas as pd
-from shapely.geometry import Point, LineString, shape, mapping
+from shapely.geometry import LineString, mapping
 from itertools import repeat
 import netCDF4 as ncf
-from itertools import chain
+#from itertools import chain
 from datetime import datetime
 from datetime import timedelta
-import tqdm
+#import tqdm
 from collections import defaultdict
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from itertools import repeat
-from typing import List, Tuple
+#from concurrent.futures import ThreadPoolExecutor, as_completed
+#from itertools import repeat
+#from typing import List, Tuple
 import functools
 print = functools.partial(print, flush=True)
 
@@ -151,11 +151,11 @@ def find_hls_tiles(date_range = False, sword_path = False, cont = False,reach_id
                 sleep(randint(1,20))
             logging.info('%s failed error: %s, tries: %s', reach_id, e, tries_cnt)
     
-    if not success:
-        try:
-            links.append(f"failed,error: {e}")
-        except:
-            links.append('failed with no error')
+    # if not success:
+    #     try:
+    #         links.append(f"failed,error: {e}")
+    #     except:
+    #         links.append('failed with no error')
     return list(set(links))
 
 
@@ -376,6 +376,8 @@ def get_args():
 
     return parser.parse_args()
 logging.info('running...')
+
+
 def main():
     """Make a jazz noise here"""
     args = get_args() 
