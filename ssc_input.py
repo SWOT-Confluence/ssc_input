@@ -92,9 +92,6 @@ def find_hls_tiles(date_range = False, sword_path = False, cont = False,reach_id
     STAC_URL = 'https://cmr.earthdata.nasa.gov/stac'
 
 
-
-    
-    
     ## NEW APPROACH
     tries = 5 # was 20, but we now also retry within the stac catalog code now.
     tries_cnt = 0
@@ -110,9 +107,9 @@ def find_hls_tiles(date_range = False, sword_path = False, cont = False,reach_id
             tries_cnt += 1
 
             retry = Retry(
-              total=5, backoff_factor=1, status_forcelist=[429, 502, 503, 504], allowed_methods=None
+              total=2, backoff_factor=1, status_forcelist=[429, 502, 503, 504], allowed_methods=None
             )
-            logging.info('retry number')
+            logging.info('retry number: %s', retry)
             stac_api_io = StacApiIO(max_retries=retry)
             logging.info('Opening stac catalog')
             catalog = Client.open(f'{STAC_URL}/LPCLOUD/', stac_io=stac_api_io)
@@ -120,7 +117,8 @@ def find_hls_tiles(date_range = False, sword_path = False, cont = False,reach_id
             search = catalog.search(
             collections=collections,
             intersects=line_geo,
-            datetime = date_range.replace(',', '/')
+            datetime = date_range.replace(',', '/'),
+            query={"eo:cloud_cover": {"lt": 30}}
             # limit=1000  # optional, just sets page size
             )
             logging.info('Search complete')
