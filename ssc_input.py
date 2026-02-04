@@ -16,7 +16,7 @@ import os
 #import sys
 import glob
 #import subprocess
-#from multiprocessing import Pool, Manager, cpu_count
+from multiprocessing import Pool#, Manager, cpu_count
 import json
 from pystac_client import Client
 #from requests.adapters import HTTPAdapter
@@ -101,16 +101,18 @@ def find_hls_tiles(date_range = False, sword_path = False, cont = False,reach_id
     links = []
     success = False
     for i in range(tries):
-        logging.info('proceessing %s', reach_id)
+        logging.info('processing %s', reach_id)
         try:
             # sleep(randint(1,60))
             logging.info('getting reach node coords')
             line_geo = get_reach_node_cords(sword_path,reach_id, cont)
+            logging.info('got reach node coords')
             tries_cnt += 1
 
             retry = Retry(
               total=5, backoff_factor=1, status_forcelist=[429, 502, 503, 504], allowed_methods=None
             )
+            logging.info('retry number')
             stac_api_io = StacApiIO(max_retries=retry)
             logging.info('Opening stac catalog')
             catalog = Client.open(f'{STAC_URL}/LPCLOUD/', stac_io=stac_api_io)
@@ -145,10 +147,12 @@ def find_hls_tiles(date_range = False, sword_path = False, cont = False,reach_id
         except Exception as e:
             er = e
             if 'rate' in str(e):
+                pass
                 # previously 1,120 2 minutes!!!
-                sleep(randint(5, 15))
-            else:
-                sleep(randint(1,20))
+                #sleep(randint(5, 15))
+            #else:
+                #pass
+                #sleep(randint(1,20))
             logging.info('%s failed error: %s, tries: %s', reach_id, e, tries_cnt)
     
     # if not success:
@@ -340,6 +344,15 @@ def get_args():
                         default=-235
                         )
 
+    parser.add_argument('-w',
+                        '--swotfile',
+                        help='where to find the swot file',
+                        metavar='str',
+                        type=str,
+                        default="D:\SWOT_Q\oc_sword_v16_SOS_results_unconstrained_20230502T204408_20250502T204408_20251219T163700.nc"
+                        )
+
+
     parser.add_argument('-t',
                         '--temporal_range',
                         help='Temporal range to search for tiles',
@@ -387,9 +400,11 @@ def main():
     temporal_range = args.temporal_range
     run_globe = args.run_globe
     starting_chunk = args.starting_chunk
+    swotfile=args.swotfile
     for arg, val in args.__dict__.items():
         logging.info("%s: %s", arg, val)
-
+    index=4 # hard coded, for test
+    outdir="D:/Luisa/data/ssc_input_test_2026_02_04"# hard coded, for test
     if index == -235 or None:
         # index = int(os.environ.get("AWS_BATCH_JOB_ARRAY_INDEX"))
         index_range = range(0,8)
@@ -397,15 +412,55 @@ def main():
     else:
         index_range = range(index, index+1)
         
-    logging.info('here is index %s', index)
+    #logging.info('here is index %s', index)
+    logging.info('we are going to open the swot nc file, %s', swotfile)
+    # Open file in read-only mode
+    nc = ncf.Dataset(swotfile, mode="r")
+
+    # List variables
+    print(nc.variables.keys())
+    print("Dimensions:", nc.dimensions.keys())
+    print("Variables at root:", nc.variables.keys())
+    print("Groups:", nc.groups.keys())
+
+
+    # Access a variable
+    temp = nc.groups["consensus"]  # read all data into memory
+    print(temp.variables.keys())
+    print("Dimensions:", temp.dimensions.keys())
+    print("Variables at root:", temp.variables.keys())
+    print("Groups:", temp.groups.keys())
+    temp2=temp.variables["consensus_q"][:]
+    temp3=temp.variables["time_int"][:]
+    temp4 = nc.groups["reaches"]
+    print("Dimensions:", temp4.dimensions.keys())
+    print("Variables at root:", temp4.variables.keys())
+    print("Groups:", temp4.groups.keys())
+    temp5=temp4.variables["reach_id"][:]
+
+    # Close file
+    nc.close()
+
+    df = pd.DataFrame({
+        "reach_id": temp5.filled(np.nan),
+        "Q": temp2,
+        "date": temp3,
+    })
+    df_save=df
+    
     for index in index_range:
 
-        cont, cont_number = get_cont_info(index = index, indir = indir)
+        #cont, cont_number = get_cont_info(index = index, indir = indir)
+        cont='oc' # hard coded, for test
+        cont_number=5 # hard coded, for test
         logging.info('processing %s', cont)
-        sword_path = os.path.join(indir, 'sword', f'{cont}_sword_v16_patch.nc')
-        if not os.path.exists(sword_path):
-            sword_path = os.path.join(indir, 'sword', f'{cont}_sword_v16.nc')
-        reach_ids = get_reach_ids(cont_number = cont_number, indir=indir, run_globe=run_globe, sword_path=sword_path)
+        
+        sword_path = "D:/SWORD/SWORD_v16_netcdf/SWORD_v16_netcdf/netcdf/oc_sword_v16.nc"#"D:/SWORD/SWORD_v16_shp/oc_shp_merged/union/sword_v16_oc.shp"
+        #os.path.join(indir, 'sword', f'{cont}_sword_v16_patch.nc')
+        #if not os.path.exists(sword_path):
+        #    sword_path = os.path.join(indir, 'sword', f'{cont}_sword_v16.nc')
+        #reach_ids = get_reach_ids(cont_number = cont_number, indir=indir, run_globe=run_globe, sword_path=sword_path)
+        reach_ids=df['reach_id'][0:2]
         
         rid_chunks =  [ reach_ids[i:i+50] for i in range(0,len(reach_ids),50) ]
         # rid_chunks = rid_chunks[305:]
