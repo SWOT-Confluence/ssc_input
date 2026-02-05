@@ -661,7 +661,7 @@ def main():
                             right_g,
                             on="date",
                             direction="nearest",
-                            tolerance=pd.Timedelta(days=1000),
+                            tolerance=pd.Timedelta(days=1),
                             suffixes=("", "_bands"),
                         )
                         #logging.info('m: %s',m)
