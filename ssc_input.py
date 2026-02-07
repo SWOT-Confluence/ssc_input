@@ -501,7 +501,8 @@ def main():
         #if not os.path.exists(sword_path):
         #    sword_path = os.path.join(indir, 'sword', f'{cont}_sword_v16.nc')
         #reach_ids = get_reach_ids(cont_number = cont_number, indir=indir, run_globe=run_globe, sword_path=sword_path)
-        reach_ids=df['reach_id'][0:5]
+        reach_ids_swot_q=df_exploded_save['reach_id'].unique()
+        reach_ids=reach_ids_swot_q[0:5]
         
         rid_chunks =  [ reach_ids[i:i+50] for i in range(0,len(reach_ids),50) ]
         # rid_chunks = rid_chunks[305:]
