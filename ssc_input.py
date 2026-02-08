@@ -103,7 +103,7 @@ def find_hls_tiles(date_range = False, sword_path = False, cont = False,reach_id
             # sleep(randint(1,60))
             logging.info('getting reach node coords')
             line_geo = get_reach_node_cords(sword_path,reach_id, cont)
-            logging.info('got reach node coords')
+            logging.info('got reach node coords, %s', line_geo)
             tries_cnt += 1
 
             retry = Retry(
@@ -262,6 +262,7 @@ def get_reach_node_cords(sword_path, reach_id, cont):
     
     node_ids_indexes = np.where(rootgrp.groups['nodes'].variables['reach_id'][:].data.astype('U') == str(reach_id))
 
+    logging.info('node_ids_indexes, %s', node_ids_indexes)
     if len(node_ids_indexes[0])!=0:
         for y in node_ids_indexes[0]:
 
@@ -287,7 +288,8 @@ def ssc_process_continent(reach_ids, cont, sword_path, temporal_range):
     input_vars = zip(repeat(sword_path), reach_ids, repeat(cont), repeat(temporal_range))
     logging.info(reach_ids[:2])
     logging.info('starting workers...')
-    pool = Pool(processes=len(reach_ids))              # start 4 worker processes
+    pool = Pool(processes=min(len(reach_ids), os.cpu_count())) # maximum number is the CPU count
+    #pool = Pool(processes=len(reach_ids))              # start 4 worker processes
     result = pool.starmap(find_download_links_for_reach_tiles, input_vars )
 
 
@@ -489,20 +491,48 @@ def main():
     test=df_exploded_save[df_exploded_save['reach_id']==51111100013]
     logging.info('r5: %s',test)
     
+    reach_ids_swot_q=df_exploded_save['reach_id'].unique()
+    reach_ids=reach_ids_swot_q[0:5] #eliminate this 0 to 5 when its time to run
+    
     for index in index_range:
 
         #cont, cont_number = get_cont_info(index = index, indir = indir)
-        cont='oc' # hard coded, for test
-        cont_number=5 # hard coded, for test
-        logging.info('processing %s', cont)
+        #cont='oc' # hard coded, for test
+        #cont_number=5 # hard coded, for test
+        #logging.info('processing %s', cont)
+        # there is no point in processing just one continent. Process all.
         
-        sword_path = "D:/SWORD/SWORD_v16_netcdf/SWORD_v16_netcdf/netcdf/oc_sword_v16.nc"#"D:/SWORD/SWORD_v16_shp/oc_shp_merged/union/sword_v16_oc.shp"
+        #please replace this part using the right continent indexes
+        reach_index=index+1
+        if reach_index==1:
+            cont='af'
+            cont_number=reach_index
+        if reach_index==2:
+            cont='eu' #eu is 2
+            cont_number=reach_index
+        if reach_index==3:
+            cont='eu' # which is 3?
+            cont_number=reach_index
+        if reach_index==4:
+            cont='as'
+            cont_number=reach_index
+        if reach_index==5:
+            cont='oc'
+            cont_number=reach_index
+        if reach_index==6:
+            cont='sa'
+            cont_number=reach_index
+        if reach_index==7:
+            cont='na'
+            cont_number=reach_index
+        
+        sword_path =  "D:/SWORD/SWORD_v17b_netcdf/netcdf/"+cont+"_sword_v17b.nc"
+        #sword_path="D:/SWORD/SWORD_v16_netcdf/SWORD_v16_netcdf/netcdf/"+cont+"_sword_v16.nc"#"D:/SWORD/SWORD_v16_shp/oc_shp_merged/union/sword_v16_oc.shp"
         #os.path.join(indir, 'sword', f'{cont}_sword_v16_patch.nc')
         #if not os.path.exists(sword_path):
         #    sword_path = os.path.join(indir, 'sword', f'{cont}_sword_v16.nc')
         #reach_ids = get_reach_ids(cont_number = cont_number, indir=indir, run_globe=run_globe, sword_path=sword_path)
-        reach_ids_swot_q=df_exploded_save['reach_id'].unique()
-        reach_ids=reach_ids_swot_q[0:5]
+        
         
         rid_chunks =  [ reach_ids[i:i+50] for i in range(0,len(reach_ids),50) ]
         # rid_chunks = rid_chunks[305:]
