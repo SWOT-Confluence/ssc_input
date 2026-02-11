@@ -511,7 +511,7 @@ def main():
             cont='eu' #eu is 2
             cont_number=reach_index
         if reach_index==3:
-            cont='eu' # which is 3?
+            cont='as' # 
             cont_number=reach_index
         if reach_index==4:
             cont='as'
@@ -523,6 +523,12 @@ def main():
             cont='sa'
             cont_number=reach_index
         if reach_index==7:
+            cont='na'
+            cont_number=reach_index
+        if reach_index==8:
+            cont='na'
+            cont_number=reach_index
+        if reach_index==9:
             cont='na'
             cont_number=reach_index
         
