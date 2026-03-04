@@ -442,7 +442,7 @@ def main():
         logging.info("%s: %s", arg, val)
     #index=4 # hard coded, for test
     #index=7 #also hard coded
-    outdir="D:/Luisa/data/ssc_input_test_2026_02_04"# hard coded, for test
+    #outdir="D:/Luisa/data/ssc_input_test_2026_02_04"# hard coded, for test
     ridtest=73150600111 #51111100013
     if index == -235 or None:
         # index = int(os.environ.get("AWS_BATCH_JOB_ARRAY_INDEX"))
@@ -457,24 +457,24 @@ def main():
     nc = ncf.Dataset(swotfile, mode="r")
 
     # List variables
-    print(nc.variables.keys())
-    print("Dimensions:", nc.dimensions.keys())
-    print("Variables at root:", nc.variables.keys())
-    print("Groups:", nc.groups.keys())
+    #print(nc.variables.keys())
+    #print("Dimensions:", nc.dimensions.keys())
+    #print("Variables at root:", nc.variables.keys())
+    #print("Groups:", nc.groups.keys())
 
 
     # Access a variable
     temp = nc.groups["consensus"]  # read all data into memory
-    print(temp.variables.keys())
-    print("Dimensions:", temp.dimensions.keys())
-    print("Variables at root:", temp.variables.keys())
-    print("Groups:", temp.groups.keys())
+    #print(temp.variables.keys())
+    #print("Dimensions:", temp.dimensions.keys())
+    #print("Variables at root:", temp.variables.keys())
+    #print("Groups:", temp.groups.keys())
     temp2=temp.variables["consensus_q"][:]
     temp3=temp.variables["time_int"][:]
     temp4 = nc.groups["reaches"]
-    print("Dimensions:", temp4.dimensions.keys())
-    print("Variables at root:", temp4.variables.keys())
-    print("Groups:", temp4.groups.keys())
+    #print("Dimensions:", temp4.dimensions.keys())
+    #print("Variables at root:", temp4.variables.keys())
+    #print("Groups:", temp4.groups.keys())
     temp5=temp4.variables["reach_id"][:]
 
     # Close file
@@ -493,7 +493,7 @@ def main():
     #df_exploded_save = df_exploded_save[df_exploded_save["date"] >= 0].copy()
     
     test=df_exploded_save[df_exploded_save['reach_id']==ridtest]
-    logging.info('r5: %s',test)
+    #logging.info('r5: %s',test)
     
     reach_ids_swot_q=df_exploded_save['reach_id'].unique()
     #reach_ids=reach_ids_swot_q#[0:5] #eliminate this 0 to 5 when its time to run
@@ -536,7 +536,8 @@ def main():
             cont='na'
             cont_number=reach_index
         
-        sword_path =  "D:/SWORD/SWORD_v17b_netcdf/netcdf/"+cont+"_sword_v17b.nc"
+        #sword_path =  "D:/SWORD/SWORD_v17b_netcdf/netcdf/"+cont+"_sword_v17b.nc"
+        sword_path =os.path.join(indir,'sword', f'{cont}_sword_v17b.nc')
         #sword_path="D:/Luisa/data/SWOT-Confluence-Offline/confluence_runTest/runTest_mnt/output/sos/"+cont+"_sword_v17_SOS_results.nc"
         #sword_path="D:/SWORD/SWORD_v16_netcdf/SWORD_v16_netcdf/netcdf/"+cont+"_sword_v16.nc"#"D:/SWORD/SWORD_v16_shp/oc_shp_merged/union/sword_v16_oc.shp"
         #os.path.join(indir, 'sword', f'{cont}_sword_v16_patch.nc')
@@ -546,8 +547,8 @@ def main():
         matches = [rid for rid in reach_ids_swot_q if str(rid).startswith(str(reach_index))]
         reach_ids = []
         reach_ids.extend(matches)
-        print(reach_ids_swot_q)
-        print(reach_ids)
+        #print(reach_ids_swot_q)
+        #print(reach_ids)
         
         rid_chunks =  [ reach_ids[i:i+50] for i in range(0,len(reach_ids),50) ]
         # rid_chunks = rid_chunks[305:]
@@ -582,7 +583,7 @@ def main():
                     pass
                 else:
                     #logging.info('df_bands["reach_ids"]: %s',df_bands["reach_ids"])
-                    print(df_bands)
+                    #print(df_bands)
                     df_exploded_bands = df_bands.explode("reach_ids").rename(columns={"reach_ids": "reach_id"})
     
                     df_exploded_save["reach_id"] = pd.to_numeric(df_exploded_save["reach_id"], errors="coerce").astype("Int64")
@@ -649,12 +650,12 @@ def main():
                     df_exploded_save = df_exploded_save.dropna(subset=["reach_id", "date"]).copy()
                     df_exploded_bands = df_exploded_bands.dropna(subset=["reach_id", "date"]).copy()
                     test=df_exploded_save[df_exploded_save['reach_id']==ridtest]
-                    logging.info('r2: %s',test)
+                    #logging.info('r2: %s',test)
                     # Sort in required order 
                     df_save_sorted = df_exploded_save.sort_values(["reach_id", "date"], kind="mergesort").reset_index(drop=True)
                     df_bands_sorted = df_exploded_bands.sort_values(["reach_id", "date"], kind="mergesort").reset_index(drop=True)
                     test=df_save_sorted[df_save_sorted['reach_id']==ridtest]
-                    logging.info('r3: %s',test)
+                    #logging.info('r3: %s',test)
                     # check monotonic within each reach_id on sides
                     bad_left = df_save_sorted.groupby("reach_id")["date"].apply(lambda s: not s.is_monotonic_increasing)
                     bad_right = df_bands_sorted.groupby("reach_id")["date"].apply(lambda s: not s.is_monotonic_increasing)
@@ -687,18 +688,18 @@ def main():
                     #logging.info('bands_by_reach: %s',bands_by_reach)
                     
                     test=df_save_sorted[df_save_sorted['reach_id']==ridtest]
-                    logging.info('r: %s',test)
+                    #logging.info('r: %s',test)
                     
                     merged_parts = []
                     
                     for rid, left_g in df_save_sorted.groupby("reach_id", sort=False):
                         right_g = bands_by_reach.get(rid)
                         #logging.info('rid: %s',rid)
-                        if rid == 51111100013:
-                            logging.info('rid: %s',rid)
-                            logging.info('right_g: %s',right_g)
-                            logging.info('left_g: %s',left_g)
-                            #logging.info('rid: %s',rid)
+                        #if rid == 51111100013:
+                        #    logging.info('rid: %s',rid)
+                        #    logging.info('right_g: %s',right_g)
+                        #    logging.info('left_g: %s',left_g)
+                        #    #logging.info('rid: %s',rid)
                         #if right_g is None:
                         #    # no bands for this reach -> keep left rows with NaNs on right columns
                         #    merged_parts.append(left_g.assign(links=pd.NA))
@@ -725,7 +726,7 @@ def main():
                     df_merged_pm1 = pd.concat(merged_parts, ignore_index=True)
     
                     sumnlinks=np.sum(df_merged_pm1['n_links'])
-                    logging.info('sumnlinks: %s',sumnlinks)
+                    #logging.info('sumnlinks: %s',sumnlinks)
     
                    # breakpoint()
                     # how far apart the match was
