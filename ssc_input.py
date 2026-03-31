@@ -537,7 +537,7 @@ def main():
             cont_number=reach_index
         
         #sword_path =  "D:/SWORD/SWORD_v17b_netcdf/netcdf/"+cont+"_sword_v17b.nc"
-        sword_path =os.path.join(indir,'sword', f'{cont}_sword_v17b.nc')
+        sword_path =os.path.join(indir,'sword', f'{cont}_sword_v17c.nc')
         #sword_path="D:/Luisa/data/SWOT-Confluence-Offline/confluence_runTest/runTest_mnt/output/sos/"+cont+"_sword_v17_SOS_results.nc"
         #sword_path="D:/SWORD/SWORD_v16_netcdf/SWORD_v16_netcdf/netcdf/"+cont+"_sword_v16.nc"#"D:/SWORD/SWORD_v16_shp/oc_shp_merged/union/sword_v16_oc.shp"
         #os.path.join(indir, 'sword', f'{cont}_sword_v16_patch.nc')
@@ -752,7 +752,7 @@ def main():
                     chunk_num += 1
                     end_time = time.time()
                     logging.info(f"Execution time: %s seconds to process chunk", end_time - start_time)
-                    write_json(bands_like_dict, os.path.join(outdir, f'{cont}_swordv17b_hls_list_chunk_{chunk_num}_time_{int(end_time - start_time)}.json'))
+                    write_json(bands_like_dict, os.path.join(outdir, f'{cont}_swordv17c_hls_list_chunk_{chunk_num}_time_{int(end_time - start_time)}.json'))
         else:
             logging.info("No reaches located for continent: %s", cont.upper())
         logging.info("All chunks processed — script completed.")
