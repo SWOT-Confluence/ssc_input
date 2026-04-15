@@ -18,10 +18,10 @@ resource "aws_batch_job_definition" "generate_batch_jd_ssc_input" {
     }
     resourceRequirements = [{
       type  = "MEMORY"
-      value = "8192"
+      value = "16384"
       }, {
       type  = "VCPU",
-      value = "4"
+      value = "8"
     }]
     mountPoints = [{
       sourceVolume  = "input",
