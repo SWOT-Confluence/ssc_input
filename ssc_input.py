@@ -9,35 +9,35 @@ Purpose: Rock the Casbah
 # python3 prepare.py -i /home/u24/travissimmons/cjx/season10/50_hand_label_test_2020_03_02 -o /home/u24/travissimmons/cjx/season10/gifs
 # makeflow process.makeflow -j 1
 import logging
-import traceback
+#import traceback
 import argparse
 import os
-import shutil
-import sys
+#import shutil
+#import sys
 import glob
-import subprocess
-from multiprocessing import Pool, Manager, cpu_count
+#import subprocess
+from multiprocessing import Pool#, Manager, cpu_count
 import json
 from pystac_client import Client
-from requests.adapters import HTTPAdapter
+#from requests.adapters import HTTPAdapter
 from urllib3 import Retry
 from pystac_client.stac_api_io import StacApiIO
 
-import geopandas as gpd
-import os
+#import geopandas as gpd
+#import os
 import numpy as np
 import pandas as pd
-from shapely.geometry import Point, LineString, shape, mapping
+from shapely.geometry import LineString, mapping
 from itertools import repeat
 import netCDF4 as ncf
-from itertools import chain
+#from itertools import chain
 from datetime import datetime
 from datetime import timedelta
-import tqdm
+#import tqdm
 from collections import defaultdict
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from itertools import repeat
-from typing import List, Tuple
+#from concurrent.futures import ThreadPoolExecutor, as_completed
+#from itertools import repeat
+#from typing import List, Tuple
 import functools
 print = functools.partial(print, flush=True)
 
@@ -92,25 +92,24 @@ def find_hls_tiles(date_range = False, sword_path = False, cont = False,reach_id
     STAC_URL = 'https://cmr.earthdata.nasa.gov/stac'
 
 
-
-    
-    
     ## NEW APPROACH
     tries = 5 # was 20, but we now also retry within the stac catalog code now.
     tries_cnt = 0
     links = []
     success = False
     for i in range(tries):
-        logging.info('proceessing %s', reach_id)
+        logging.info('processing %s', reach_id)
         try:
             # sleep(randint(1,60))
             logging.info('getting reach node coords')
             line_geo = get_reach_node_cords(sword_path,reach_id, cont)
+            logging.info('got reach node coords')
             tries_cnt += 1
 
             retry = Retry(
-              total=5, backoff_factor=1, status_forcelist=[429, 502, 503, 504], allowed_methods=None
+              total=2, backoff_factor=1, status_forcelist=[429, 502, 503, 504], allowed_methods=None
             )
+            logging.info('retry number: %s', retry)
             stac_api_io = StacApiIO(max_retries=retry)
             logging.info('Opening stac catalog')
             catalog = Client.open(f'{STAC_URL}/LPCLOUD/', stac_io=stac_api_io)
@@ -118,7 +117,8 @@ def find_hls_tiles(date_range = False, sword_path = False, cont = False,reach_id
             search = catalog.search(
             collections=collections,
             intersects=line_geo,
-            datetime = date_range.replace(',', '/')
+            datetime = date_range.replace(',', '/'),
+            query={"eo:cloud_cover": {"lt": 30}}
             # limit=1000  # optional, just sets page size
             )
             logging.info('Search complete')
@@ -129,12 +129,17 @@ def find_hls_tiles(date_range = False, sword_path = False, cont = False,reach_id
             for i in all_items:
             # print(i, list(i.keys()))
                 i = i.to_dict()
-                for key in i['assets']:
-                    # print(key)
-                    if key.startswith('B'):
-                        # link = i.assets[key].href.replace('https://data.lpdaac.earthdatacloud.nasa.gov/', 's3://')
-                        link = i['assets'][key]['href']
-                        links.append(link)
+                preferred_band = "B02"   # blue
+                for key, asset in i["assets"].items():
+                    if key == preferred_band:
+                        links.append(asset["href"])
+
+                # for key in i['assets']:
+                #     # print(key)
+                #     if key.startswith('B'):
+                #         # link = i.assets[key].href.replace('https://data.lpdaac.earthdatacloud.nasa.gov/', 's3://')
+                #         link = i['assets'][key]['href']
+                #         links.append(link)
                 
 
                 
@@ -145,17 +150,19 @@ def find_hls_tiles(date_range = False, sword_path = False, cont = False,reach_id
         except Exception as e:
             er = e
             if 'rate' in str(e):
+                #pass
                 # previously 1,120 2 minutes!!!
-                sleep(randint(5, 15))
-            else:
-                sleep(randint(1,20))
+                sleep(randint(5, 10))
+            #else:
+                #pass
+                #sleep(randint(1,20))
             logging.info('%s failed error: %s, tries: %s', reach_id, e, tries_cnt)
     
-    if not success:
-        try:
-            links.append(f"failed,error: {e}")
-        except:
-            links.append('failed with no error')
+    # if not success:
+    #     try:
+    #         links.append(f"failed,error: {e}")
+    #     except:
+    #         links.append('failed with no error')
     return list(set(links))
 
 
@@ -290,7 +297,7 @@ def ssc_process_continent(reach_ids, cont, sword_path, temporal_range):
             for link in links:
                 inverted[link].append(reach_id)
 
-    # Convert defaultdict to regular dict (optional)
+    # Convert defaultdict to regular dict 
     result = dict(inverted)
 
     # pool.close()
@@ -324,6 +331,34 @@ def write_json(json_object, filename):
 
 
 
+def parse_hls_from_link(link: str) -> dict:
+    """
+    Parse an HLS band filename like:
+      HLS.L30.T11SLC.2022166T182646.v2.0.B02.tif
+    """
+    base = os.path.basename(link)
+    parts = base.split(".")
+
+    # Expected (band files): HLS.<sensor>.<tile>.<YYYYDDDTHHMMSS>.v2.0.<band>.tif
+    # Example parts: ['HLS','L30','T11SLC','2022166T182646','v2','0','B02','tif']
+    if len(parts) < 8 or parts[0] != "HLS":
+        # fallback: return minimal info
+        return {"filename": base}
+
+    dt_str = parts[3]                 # '2022166T182646'
+
+    # Parse YYYY + Julian day + time
+    dt = pd.to_datetime(dt_str, format="%Y%jT%H%M%S", utc=True)
+
+    return {
+        "filename": base,
+        "dt_utc": dt,                 # full timestamp
+        "date": dt.date(),            # just the date
+    }
+
+
+
+
 # --------------------------------------------------
 def get_args():
     """Get command-line arguments"""
@@ -339,6 +374,15 @@ def get_args():
                         type=int,
                         default=-235
                         )
+
+    parser.add_argument('-w',
+                        '--swotfile',
+                        help='where to find the swot file',
+                        metavar='str',
+                        type=str,
+                        default="D:\SWOT_Q\oc_sword_v16_SOS_results_unconstrained_20230502T204408_20250502T204408_20251219T163700.nc"
+                        )
+
 
     parser.add_argument('-t',
                         '--temporal_range',
@@ -376,8 +420,13 @@ def get_args():
 
     return parser.parse_args()
 logging.info('running...')
+
+
 def main():
-    """Make a jazz noise here"""
+# testing=True
+    
+# if testing:
+    #"""Make a jazz noise here"""
     args = get_args() 
     indir = args.indir
     outdir = args.outdir
@@ -385,9 +434,11 @@ def main():
     temporal_range = args.temporal_range
     run_globe = args.run_globe
     starting_chunk = args.starting_chunk
+    swotfile=args.swotfile
     for arg, val in args.__dict__.items():
         logging.info("%s: %s", arg, val)
-
+    index=4 # hard coded, for test
+    outdir="D:/Luisa/data/ssc_input_test_2026_02_04"# hard coded, for test
     if index == -235 or None:
         # index = int(os.environ.get("AWS_BATCH_JOB_ARRAY_INDEX"))
         index_range = range(0,8)
@@ -395,15 +446,63 @@ def main():
     else:
         index_range = range(index, index+1)
         
-    logging.info('here is index %s', index)
+    #logging.info('here is index %s', index)
+    logging.info('we are going to open the swot nc file, %s', swotfile)
+    # Open file in read-only mode
+    nc = ncf.Dataset(swotfile, mode="r")
+
+    # List variables
+    print(nc.variables.keys())
+    print("Dimensions:", nc.dimensions.keys())
+    print("Variables at root:", nc.variables.keys())
+    print("Groups:", nc.groups.keys())
+
+
+    # Access a variable
+    temp = nc.groups["consensus"]  # read all data into memory
+    print(temp.variables.keys())
+    print("Dimensions:", temp.dimensions.keys())
+    print("Variables at root:", temp.variables.keys())
+    print("Groups:", temp.groups.keys())
+    temp2=temp.variables["consensus_q"][:]
+    temp3=temp.variables["time_int"][:]
+    temp4 = nc.groups["reaches"]
+    print("Dimensions:", temp4.dimensions.keys())
+    print("Variables at root:", temp4.variables.keys())
+    print("Groups:", temp4.groups.keys())
+    temp5=temp4.variables["reach_id"][:]
+
+    # Close file
+    nc.close()
+
+    df = pd.DataFrame({
+        "reach_id": temp5.filled(np.nan),
+        "Q": temp2,
+        "date": temp3,
+    })
+    df_save=df#.dropna(subset='Q')
+    df_exploded_save=df_save.explode(["date", "Q"])
+
+    df_exploded_save=df_exploded_save.dropna(subset='Q')
+    df_exploded_save = df_exploded_save[df_exploded_save["date"] >= 0].copy()
+    
+    test=df_exploded_save[df_exploded_save['reach_id']==51111100013]
+    logging.info('r5: %s',test)
+    
     for index in index_range:
 
-        cont, cont_number = get_cont_info(index = index, indir = indir)
+        #cont, cont_number = get_cont_info(index = index, indir = indir)
+        cont='oc' # hard coded, for test
+        cont_number=5 # hard coded, for test
         logging.info('processing %s', cont)
-        sword_path = os.path.join(indir, 'sword', f'{cont}_sword_v16_patch.nc')
-        if not os.path.exists(sword_path):
-            sword_path = os.path.join(indir, 'sword', f'{cont}_sword_v16.nc')
-        reach_ids = get_reach_ids(cont_number = cont_number, indir=indir, run_globe=run_globe, sword_path=sword_path)
+        
+        sword_path = "D:/SWORD/SWORD_v16_netcdf/SWORD_v16_netcdf/netcdf/oc_sword_v16.nc"#"D:/SWORD/SWORD_v16_shp/oc_shp_merged/union/sword_v16_oc.shp"
+        #os.path.join(indir, 'sword', f'{cont}_sword_v16_patch.nc')
+        #if not os.path.exists(sword_path):
+        #    sword_path = os.path.join(indir, 'sword', f'{cont}_sword_v16.nc')
+        #reach_ids = get_reach_ids(cont_number = cont_number, indir=indir, run_globe=run_globe, sword_path=sword_path)
+        reach_ids_swot_q=df_exploded_save['reach_id'].unique()
+        reach_ids=reach_ids_swot_q[0:5]
         
         rid_chunks =  [ reach_ids[i:i+50] for i in range(0,len(reach_ids),50) ]
         # rid_chunks = rid_chunks[305:]
@@ -419,16 +518,192 @@ def main():
                 start_time = time.time()
                 logging.info('processing chunk %s of %s', chunk_num, len(rid_chunks))
                 bands = ssc_process_continent(rid_chunk, cont, sword_path, temporal_range)
+                #logging.info('bands variable: %s',bands)
+                logging.info('rid_chunk %s', rid_chunk)
+                # we should filter by date, now.
+                rows = []
+                for link, reach_list in bands.items():
+                    meta = parse_hls_from_link(link)
+                    meta["link"] = link
+                    meta["reach_ids"] = reach_list
+                    meta["n_reaches"] = len(reach_list) if isinstance(reach_list, list) else None
+                    rows.append(meta)
+                    #logging.info('meta: %s',meta)
+
+                df_bands = pd.DataFrame(rows)
+                #logging.info('df_bands["reach_ids"]: %s',df_bands["reach_ids"])
+                df_exploded_bands = df_bands.explode("reach_ids").rename(columns={"reach_ids": "reach_id"})
+
+                df_exploded_save["reach_id"] = pd.to_numeric(df_exploded_save["reach_id"], errors="coerce").astype("Int64")
+                df_exploded_bands["reach_id"] = pd.to_numeric(df_exploded_bands["reach_id"], errors="coerce").astype("Int64")
+
+                # df_exploded_save["reach_id"] = df_exploded_save["reach_id"].astype(str)
+                # df_exploded_bands["reach_id"] = df_exploded_bands["reach_id"].astype(str)
+                #breakpoint()
+                #logging.info('example date: %s',df_exploded_save["date"][1])
+                df_exploded_save = df_exploded_save[df_exploded_save["date"] >= 0].copy()
+                #logging.info('example date v2: %s',df_exploded_save["date"][1])
+                df_exploded_save["date"] = (
+                     pd.to_datetime("2000-01-01")
+                     + pd.to_timedelta(df_exploded_save["date"].astype(int), unit="S")
+                 )
+                #df_exploded_save["date"] = df_exploded_save["date"].dt.normalize()
+                df_exploded_save["date"] = pd.to_datetime(df_exploded_save["date"]).dt.normalize()
+                df_exploded_bands["date"] = pd.to_datetime(df_exploded_bands["date"]).dt.normalize()
+                
+                test=df_exploded_save[df_exploded_save['reach_id']==51111100013]
+                logging.info('r4: %s',test)
+                
+                bands_agg = (
+                    df_exploded_bands
+                    .groupby(["reach_id", "date"], as_index=False)
+                    .agg(
+                        links=("link", lambda x: list(pd.unique(x))),
+                        #bands=("band", lambda x: list(pd.unique(x))),
+                        n_links=("link", "nunique"),
+                    )
+                )
+                df_exploded_bands=bands_agg
+                # bad = (df_save_sorted
+                #        .groupby("reach_id")["date"]
+                #        .apply(lambda s: not s.is_monotonic_increasing))
+                
+                # print("Any reach_id groups not sorted?:", bad.any())
+                # if bad.any():
+                #    print("Example bad reach_ids:", bad[bad].index[:10].tolist())
+                #breakpoint()
+                # print(df_save_sorted[["reach_id","date"]].head(15))
+
+                # print(df_save_sorted[["reach_id","date"]].tail(15))
+
+                # print(df_save_sorted.dtypes)
+                def clean_reach_id(x):
+                    try:
+                        if pd.isna(x):
+                            return None
+                        return str(int(float(x)))  # 57208000161.0
+                    except Exception:
+                        return str(x).strip()
+                
+                # Clean reach IDs
+                #df_exploded_save["reach_id"] = df_exploded_save["reach_id"].apply(clean_reach_id)
+                #df_exploded_bands["reach_id"] = df_exploded_bands["reach_id"].apply(clean_reach_id)
+                
+                # Make sure dates are datetimes
+                df_exploded_save["date"] = pd.to_datetime(df_exploded_save["date"], errors="coerce").dt.normalize()
+                df_exploded_bands["date"] = pd.to_datetime(df_exploded_bands["date"], errors="coerce").dt.normalize()
+
+                #  drop NaT + missing keys on BOTH sides
+                df_exploded_save = df_exploded_save.dropna(subset=["reach_id", "date"]).copy()
+                df_exploded_bands = df_exploded_bands.dropna(subset=["reach_id", "date"]).copy()
+                test=df_exploded_save[df_exploded_save['reach_id']==51111100013]
+                logging.info('r2: %s',test)
+                # Sort in required order 
+                df_save_sorted = df_exploded_save.sort_values(["reach_id", "date"], kind="mergesort").reset_index(drop=True)
+                df_bands_sorted = df_exploded_bands.sort_values(["reach_id", "date"], kind="mergesort").reset_index(drop=True)
+                test=df_save_sorted[df_save_sorted['reach_id']==51111100013]
+                logging.info('r3: %s',test)
+                # check monotonic within each reach_id on sides
+                bad_left = df_save_sorted.groupby("reach_id")["date"].apply(lambda s: not s.is_monotonic_increasing)
+                bad_right = df_bands_sorted.groupby("reach_id")["date"].apply(lambda s: not s.is_monotonic_increasing)
+                
+                # print("bad_left groups:", int(bad_left.sum()))
+                # print("bad_right groups:", int(bad_right.sum()))
+                # if bad_left.any():
+                #     print("example bad_left reach_ids:", bad_left[bad_left].index[:5].tolist())
+                # if bad_right.any():
+                #     print("example bad_right reach_ids:", bad_right[bad_right].index[:5].tolist())
+                # print(df_save_sorted["date"].isna().sum(), df_bands_sorted["date"].isna().sum())
+                # print(df_save_sorted[["reach_id","date"]].head(5))
+                # print(df_save_sorted[["reach_id","date"]].tail(5))
+
+                # Merge 1 day
+                # df_merged_pm1 = pd.merge_asof(
+                #     df_save_sorted,
+                #     df_bands_sorted,
+                #     on="date",
+                #     by="reach_id",
+                #     direction="nearest",
+                #     tolerance=pd.Timedelta(days=1),
+                # )
+
+                # df_save_sorted and df_bands_sorted must already be cleaned, datetime, and sorted by reach_id/date
+                # (the ones you printed from)
+                
+                # Index right side by reach_id for fast lookup
+                bands_by_reach = {rid: g.sort_values("date") for rid, g in df_bands_sorted.groupby("reach_id", sort=False)}
+                #logging.info('bands_by_reach: %s',bands_by_reach)
+                
+                test=df_save_sorted[df_save_sorted['reach_id']==51111100013]
+                logging.info('r: %s',test)
+                
+                merged_parts = []
+                
+                for rid, left_g in df_save_sorted.groupby("reach_id", sort=False):
+                    right_g = bands_by_reach.get(rid)
+                    #logging.info('rid: %s',rid)
+                    if rid == 51111100013:
+                        logging.info('rid: %s',rid)
+                        logging.info('right_g: %s',right_g)
+                        logging.info('left_g: %s',left_g)
+                        #logging.info('rid: %s',rid)
+                    #if right_g is None:
+                    #    # no bands for this reach -> keep left rows with NaNs on right columns
+                    #    merged_parts.append(left_g.assign(links=pd.NA))
+                    #    continue
+                    if right_g is not None:
+                        logging.info('rid: %s',rid)
+                        #logging.info('right_g: %s',right_g)
+                        left_g = left_g.sort_values("date")
+                        right_g = right_g.sort_values("date")
+                        #logging.info('left_g: %s',left_g)
+                        m = pd.merge_asof(
+                            left_g,
+                            right_g,
+                            on="date",
+                            direction="nearest",
+                            tolerance=pd.Timedelta(days=1),
+                            suffixes=("", "_bands"),
+                        )
+                        #logging.info('m: %s',m)
+                        sumnlinks=np.sum(m['n_links'])
+                        logging.info('sumnlinks: %s',sumnlinks)
+                        merged_parts.append(m)
+                
+                df_merged_pm1 = pd.concat(merged_parts, ignore_index=True)
+
+                sumnlinks=np.sum(df_merged_pm1['n_links'])
+                logging.info('sumnlinks: %s',sumnlinks)
+
+               # breakpoint()
+                # how far apart the match was
+                df_merged_pm1["date_diff_days"] = (
+                    (df_merged_pm1["date"] - df_merged_pm1["date_bands"]).dt.days #positive - Q is later, negative - SSC is later
+                    if "date_bands" in df_merged_pm1.columns else None
+                )
+                #logging.info('df_merged_pm1: %s',df_merged_pm1)
+                #from collections import defaultdict
+
+                # df_merged_pm1 must contain: reach_id, links (where links is a list of urls or NaN)
+                out = defaultdict(set)
+                
+                for rid, links in zip(df_merged_pm1["reach_id"], df_merged_pm1["links"]):
+                    if isinstance(links, list) and len(links) > 0:
+                        for link in links:
+                            out[link].add(str(rid))
+                
+                # Convert sets to sorted lists (optional)
+                bands_like_dict = {link: sorted(list(rids)) for link, rids in out.items()}
 
 
                 chunk_num += 1
                 end_time = time.time()
                 logging.info(f"Execution time: %s seconds to process chunk", end_time - start_time)
-                write_json(bands, os.path.join(outdir, f'{cont}_hls_list_chunk_{chunk_num}_time_{int(end_time - start_time)}.json'))
+                write_json(bands_like_dict, os.path.join(outdir, f'{cont}_hls_datefilt2_list_chunk_{chunk_num}_time_{int(end_time - start_time)}.json'))
         else:
             logging.info("No reaches located for continent: %s", cont.upper())
         logging.info("All chunks processed — script completed.")
               
 # --------------------------------------------------
 if __name__ == '__main__':
-    main()
+   main()
