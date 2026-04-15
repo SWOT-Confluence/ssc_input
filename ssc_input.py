@@ -103,7 +103,7 @@ def find_hls_tiles(date_range = False, sword_path = False, cont = False,reach_id
             # sleep(randint(1,60))
             logging.info('getting reach node coords')
             line_geo = get_reach_node_cords(sword_path,reach_id, cont)
-            logging.info('got reach node coords')
+            logging.info('got reach node coords, %s', line_geo)
             tries_cnt += 1
 
             retry = Retry(
@@ -262,6 +262,7 @@ def get_reach_node_cords(sword_path, reach_id, cont):
     
     node_ids_indexes = np.where(rootgrp.groups['nodes'].variables['reach_id'][:].data.astype('U') == str(reach_id))
 
+    logging.info('node_ids_indexes, %s', node_ids_indexes)
     if len(node_ids_indexes[0])!=0:
         for y in node_ids_indexes[0]:
 
@@ -287,7 +288,8 @@ def ssc_process_continent(reach_ids, cont, sword_path, temporal_range):
     input_vars = zip(repeat(sword_path), reach_ids, repeat(cont), repeat(temporal_range))
     logging.info(reach_ids[:2])
     logging.info('starting workers...')
-    pool = Pool(processes=len(reach_ids))              # start 4 worker processes
+    pool = Pool(processes=min(len(reach_ids), os.cpu_count())) # maximum number is the CPU count
+    #pool = Pool(processes=len(reach_ids))              # start 4 worker processes
     result = pool.starmap(find_download_links_for_reach_tiles, input_vars )
 
 
@@ -357,6 +359,7 @@ def parse_hls_from_link(link: str) -> dict:
     }
 
 
+#old swotfile D:\SWOT_Q\oc_sword_v16_SOS_results_unconstrained_20230502T204408_20250502T204408_20251219T163700.nc"
 
 
 # --------------------------------------------------
@@ -380,8 +383,8 @@ def get_args():
                         help='where to find the swot file',
                         metavar='str',
                         type=str,
-                        default="D:\SWOT_Q\oc_sword_v16_SOS_results_unconstrained_20230502T204408_20250502T204408_20251219T163700.nc"
-                        )
+                        default="D:/Luisa/data/SWOT-Confluence-Offline/confluence_runTest/runTest_mnt/output/sos/na_sword_v17_SOS_results.nc"
+                                                )
 
 
     parser.add_argument('-t',
@@ -437,8 +440,10 @@ def main():
     swotfile=args.swotfile
     for arg, val in args.__dict__.items():
         logging.info("%s: %s", arg, val)
-    index=4 # hard coded, for test
-    outdir="D:/Luisa/data/ssc_input_test_2026_02_04"# hard coded, for test
+    #index=4 # hard coded, for test
+    #index=7 #also hard coded
+    #outdir="D:/Luisa/data/ssc_input_test_2026_02_04"# hard coded, for test
+    ridtest=73150600111 #51111100013
     if index == -235 or None:
         # index = int(os.environ.get("AWS_BATCH_JOB_ARRAY_INDEX"))
         index_range = range(0,8)
@@ -452,24 +457,24 @@ def main():
     nc = ncf.Dataset(swotfile, mode="r")
 
     # List variables
-    print(nc.variables.keys())
-    print("Dimensions:", nc.dimensions.keys())
-    print("Variables at root:", nc.variables.keys())
-    print("Groups:", nc.groups.keys())
+    #print(nc.variables.keys())
+    #print("Dimensions:", nc.dimensions.keys())
+    #print("Variables at root:", nc.variables.keys())
+    #print("Groups:", nc.groups.keys())
 
 
     # Access a variable
     temp = nc.groups["consensus"]  # read all data into memory
-    print(temp.variables.keys())
-    print("Dimensions:", temp.dimensions.keys())
-    print("Variables at root:", temp.variables.keys())
-    print("Groups:", temp.groups.keys())
+    #print(temp.variables.keys())
+    #print("Dimensions:", temp.dimensions.keys())
+    #print("Variables at root:", temp.variables.keys())
+    #print("Groups:", temp.groups.keys())
     temp2=temp.variables["consensus_q"][:]
     temp3=temp.variables["time_int"][:]
     temp4 = nc.groups["reaches"]
-    print("Dimensions:", temp4.dimensions.keys())
-    print("Variables at root:", temp4.variables.keys())
-    print("Groups:", temp4.groups.keys())
+    #print("Dimensions:", temp4.dimensions.keys())
+    #print("Variables at root:", temp4.variables.keys())
+    #print("Groups:", temp4.groups.keys())
     temp5=temp4.variables["reach_id"][:]
 
     # Close file
@@ -485,24 +490,65 @@ def main():
 
     df_exploded_save=df_exploded_save.dropna(subset='Q')
     df_exploded_save = df_exploded_save[df_exploded_save["date"] >= 0].copy()
+    #df_exploded_save = df_exploded_save[df_exploded_save["date"] >= 0].copy()
     
-    test=df_exploded_save[df_exploded_save['reach_id']==51111100013]
-    logging.info('r5: %s',test)
+    test=df_exploded_save[df_exploded_save['reach_id']==ridtest]
+    #logging.info('r5: %s',test)
+    
+    reach_ids_swot_q=df_exploded_save['reach_id'].unique()
+    #reach_ids=reach_ids_swot_q#[0:5] #eliminate this 0 to 5 when its time to run
     
     for index in index_range:
 
         #cont, cont_number = get_cont_info(index = index, indir = indir)
-        cont='oc' # hard coded, for test
-        cont_number=5 # hard coded, for test
-        logging.info('processing %s', cont)
+        #cont='oc' # hard coded, for test
+        #cont_number=5 # hard coded, for test
+        #logging.info('processing %s', cont)
+        # there is no point in processing just one continent. Process all.
         
-        sword_path = "D:/SWORD/SWORD_v16_netcdf/SWORD_v16_netcdf/netcdf/oc_sword_v16.nc"#"D:/SWORD/SWORD_v16_shp/oc_shp_merged/union/sword_v16_oc.shp"
+        #please replace this part using the right continent indexes
+        reach_index=index+1
+        if reach_index==1:
+            cont='af'
+            cont_number=reach_index
+        if reach_index==2:
+            cont='eu' #eu is 2
+            cont_number=reach_index
+        if reach_index==3:
+            cont='as' # 
+            cont_number=reach_index
+        if reach_index==4:
+            cont='as'
+            cont_number=reach_index
+        if reach_index==5:
+            cont='oc'
+            cont_number=reach_index
+        if reach_index==6:
+            cont='sa'
+            cont_number=reach_index
+        if reach_index==7:
+            cont='na'
+            cont_number=reach_index
+        if reach_index==8:
+            cont='na'
+            cont_number=reach_index
+        if reach_index==9:
+            cont='na'
+            cont_number=reach_index
+        
+        #sword_path =  "D:/SWORD/SWORD_v17b_netcdf/netcdf/"+cont+"_sword_v17b.nc"
+        sword_path =os.path.join(indir,'sword', f'{cont}_sword_v17c.nc')
+        #sword_path="D:/Luisa/data/SWOT-Confluence-Offline/confluence_runTest/runTest_mnt/output/sos/"+cont+"_sword_v17_SOS_results.nc"
+        #sword_path="D:/SWORD/SWORD_v16_netcdf/SWORD_v16_netcdf/netcdf/"+cont+"_sword_v16.nc"#"D:/SWORD/SWORD_v16_shp/oc_shp_merged/union/sword_v16_oc.shp"
         #os.path.join(indir, 'sword', f'{cont}_sword_v16_patch.nc')
         #if not os.path.exists(sword_path):
         #    sword_path = os.path.join(indir, 'sword', f'{cont}_sword_v16.nc')
         #reach_ids = get_reach_ids(cont_number = cont_number, indir=indir, run_globe=run_globe, sword_path=sword_path)
-        reach_ids_swot_q=df_exploded_save['reach_id'].unique()
-        reach_ids=reach_ids_swot_q[0:5]
+        matches = [rid for rid in reach_ids_swot_q if str(rid).startswith(str(reach_index))]
+        reach_ids = []
+        reach_ids.extend(matches)
+        #print(reach_ids_swot_q)
+        #print(reach_ids)
         
         rid_chunks =  [ reach_ids[i:i+50] for i in range(0,len(reach_ids),50) ]
         # rid_chunks = rid_chunks[305:]
@@ -531,175 +577,182 @@ def main():
                     #logging.info('meta: %s',meta)
 
                 df_bands = pd.DataFrame(rows)
-                #logging.info('df_bands["reach_ids"]: %s',df_bands["reach_ids"])
-                df_exploded_bands = df_bands.explode("reach_ids").rename(columns={"reach_ids": "reach_id"})
-
-                df_exploded_save["reach_id"] = pd.to_numeric(df_exploded_save["reach_id"], errors="coerce").astype("Int64")
-                df_exploded_bands["reach_id"] = pd.to_numeric(df_exploded_bands["reach_id"], errors="coerce").astype("Int64")
-
-                # df_exploded_save["reach_id"] = df_exploded_save["reach_id"].astype(str)
-                # df_exploded_bands["reach_id"] = df_exploded_bands["reach_id"].astype(str)
-                #breakpoint()
-                #logging.info('example date: %s',df_exploded_save["date"][1])
-                df_exploded_save = df_exploded_save[df_exploded_save["date"] >= 0].copy()
-                #logging.info('example date v2: %s',df_exploded_save["date"][1])
-                df_exploded_save["date"] = (
-                     pd.to_datetime("2000-01-01")
-                     + pd.to_timedelta(df_exploded_save["date"].astype(int), unit="S")
-                 )
-                #df_exploded_save["date"] = df_exploded_save["date"].dt.normalize()
-                df_exploded_save["date"] = pd.to_datetime(df_exploded_save["date"]).dt.normalize()
-                df_exploded_bands["date"] = pd.to_datetime(df_exploded_bands["date"]).dt.normalize()
-                
-                test=df_exploded_save[df_exploded_save['reach_id']==51111100013]
-                logging.info('r4: %s',test)
-                
-                bands_agg = (
-                    df_exploded_bands
-                    .groupby(["reach_id", "date"], as_index=False)
-                    .agg(
-                        links=("link", lambda x: list(pd.unique(x))),
-                        #bands=("band", lambda x: list(pd.unique(x))),
-                        n_links=("link", "nunique"),
-                    )
-                )
-                df_exploded_bands=bands_agg
-                # bad = (df_save_sorted
-                #        .groupby("reach_id")["date"]
-                #        .apply(lambda s: not s.is_monotonic_increasing))
-                
-                # print("Any reach_id groups not sorted?:", bad.any())
-                # if bad.any():
-                #    print("Example bad reach_ids:", bad[bad].index[:10].tolist())
-                #breakpoint()
-                # print(df_save_sorted[["reach_id","date"]].head(15))
-
-                # print(df_save_sorted[["reach_id","date"]].tail(15))
-
-                # print(df_save_sorted.dtypes)
-                def clean_reach_id(x):
-                    try:
-                        if pd.isna(x):
-                            return None
-                        return str(int(float(x)))  # 57208000161.0
-                    except Exception:
-                        return str(x).strip()
-                
-                # Clean reach IDs
-                #df_exploded_save["reach_id"] = df_exploded_save["reach_id"].apply(clean_reach_id)
-                #df_exploded_bands["reach_id"] = df_exploded_bands["reach_id"].apply(clean_reach_id)
-                
-                # Make sure dates are datetimes
-                df_exploded_save["date"] = pd.to_datetime(df_exploded_save["date"], errors="coerce").dt.normalize()
-                df_exploded_bands["date"] = pd.to_datetime(df_exploded_bands["date"], errors="coerce").dt.normalize()
-
-                #  drop NaT + missing keys on BOTH sides
-                df_exploded_save = df_exploded_save.dropna(subset=["reach_id", "date"]).copy()
-                df_exploded_bands = df_exploded_bands.dropna(subset=["reach_id", "date"]).copy()
-                test=df_exploded_save[df_exploded_save['reach_id']==51111100013]
-                logging.info('r2: %s',test)
-                # Sort in required order 
-                df_save_sorted = df_exploded_save.sort_values(["reach_id", "date"], kind="mergesort").reset_index(drop=True)
-                df_bands_sorted = df_exploded_bands.sort_values(["reach_id", "date"], kind="mergesort").reset_index(drop=True)
-                test=df_save_sorted[df_save_sorted['reach_id']==51111100013]
-                logging.info('r3: %s',test)
-                # check monotonic within each reach_id on sides
-                bad_left = df_save_sorted.groupby("reach_id")["date"].apply(lambda s: not s.is_monotonic_increasing)
-                bad_right = df_bands_sorted.groupby("reach_id")["date"].apply(lambda s: not s.is_monotonic_increasing)
-                
-                # print("bad_left groups:", int(bad_left.sum()))
-                # print("bad_right groups:", int(bad_right.sum()))
-                # if bad_left.any():
-                #     print("example bad_left reach_ids:", bad_left[bad_left].index[:5].tolist())
-                # if bad_right.any():
-                #     print("example bad_right reach_ids:", bad_right[bad_right].index[:5].tolist())
-                # print(df_save_sorted["date"].isna().sum(), df_bands_sorted["date"].isna().sum())
-                # print(df_save_sorted[["reach_id","date"]].head(5))
-                # print(df_save_sorted[["reach_id","date"]].tail(5))
-
-                # Merge 1 day
-                # df_merged_pm1 = pd.merge_asof(
-                #     df_save_sorted,
-                #     df_bands_sorted,
-                #     on="date",
-                #     by="reach_id",
-                #     direction="nearest",
-                #     tolerance=pd.Timedelta(days=1),
-                # )
-
-                # df_save_sorted and df_bands_sorted must already be cleaned, datetime, and sorted by reach_id/date
-                # (the ones you printed from)
-                
-                # Index right side by reach_id for fast lookup
-                bands_by_reach = {rid: g.sort_values("date") for rid, g in df_bands_sorted.groupby("reach_id", sort=False)}
-                #logging.info('bands_by_reach: %s',bands_by_reach)
-                
-                test=df_save_sorted[df_save_sorted['reach_id']==51111100013]
-                logging.info('r: %s',test)
-                
-                merged_parts = []
-                
-                for rid, left_g in df_save_sorted.groupby("reach_id", sort=False):
-                    right_g = bands_by_reach.get(rid)
-                    #logging.info('rid: %s',rid)
-                    if rid == 51111100013:
-                        logging.info('rid: %s',rid)
-                        logging.info('right_g: %s',right_g)
-                        logging.info('left_g: %s',left_g)
-                        #logging.info('rid: %s',rid)
-                    #if right_g is None:
-                    #    # no bands for this reach -> keep left rows with NaNs on right columns
-                    #    merged_parts.append(left_g.assign(links=pd.NA))
-                    #    continue
-                    if right_g is not None:
-                        logging.info('rid: %s',rid)
-                        #logging.info('right_g: %s',right_g)
-                        left_g = left_g.sort_values("date")
-                        right_g = right_g.sort_values("date")
-                        #logging.info('left_g: %s',left_g)
-                        m = pd.merge_asof(
-                            left_g,
-                            right_g,
-                            on="date",
-                            direction="nearest",
-                            tolerance=pd.Timedelta(days=1),
-                            suffixes=("", "_bands"),
+                #print(df_bands)
+                if df_bands is None or df_bands.empty:
+                    #print(df_bands)
+                    pass
+                else:
+                    #logging.info('df_bands["reach_ids"]: %s',df_bands["reach_ids"])
+                    #print(df_bands)
+                    df_exploded_bands = df_bands.explode("reach_ids").rename(columns={"reach_ids": "reach_id"})
+    
+                    df_exploded_save["reach_id"] = pd.to_numeric(df_exploded_save["reach_id"], errors="coerce").astype("Int64")
+                    df_exploded_bands["reach_id"] = pd.to_numeric(df_exploded_bands["reach_id"], errors="coerce").astype("Int64")
+    
+                    # df_exploded_save["reach_id"] = df_exploded_save["reach_id"].astype(str)
+                    # df_exploded_bands["reach_id"] = df_exploded_bands["reach_id"].astype(str)
+                    #breakpoint()
+                    #logging.info('example date: %s',df_exploded_save["date"][1])
+                    
+                    
+                    #logging.info('example date v2: %s',df_exploded_save["date"][1])
+                    df_exploded_save["date"] = (
+                         pd.to_datetime("2000-01-01")
+                         + pd.to_timedelta(df_exploded_save["date"].astype('int64'), unit="S")
+                     )
+                    #df_exploded_save["date"] = df_exploded_save["date"].dt.normalize()
+                    df_exploded_save["date"] = pd.to_datetime(df_exploded_save["date"]).dt.normalize()
+                    df_exploded_bands["date"] = pd.to_datetime(df_exploded_bands["date"]).dt.normalize()
+                    
+                    test=df_exploded_save[df_exploded_save['reach_id']==ridtest]
+                    logging.info('r4: %s',test)
+                    
+                    bands_agg = (
+                        df_exploded_bands
+                        .groupby(["reach_id", "date"], as_index=False)
+                        .agg(
+                            links=("link", lambda x: list(pd.unique(x))),
+                            #bands=("band", lambda x: list(pd.unique(x))),
+                            n_links=("link", "nunique"),
                         )
-                        #logging.info('m: %s',m)
-                        sumnlinks=np.sum(m['n_links'])
-                        logging.info('sumnlinks: %s',sumnlinks)
-                        merged_parts.append(m)
-                
-                df_merged_pm1 = pd.concat(merged_parts, ignore_index=True)
-
-                sumnlinks=np.sum(df_merged_pm1['n_links'])
-                logging.info('sumnlinks: %s',sumnlinks)
-
-               # breakpoint()
-                # how far apart the match was
-                df_merged_pm1["date_diff_days"] = (
-                    (df_merged_pm1["date"] - df_merged_pm1["date_bands"]).dt.days #positive - Q is later, negative - SSC is later
-                    if "date_bands" in df_merged_pm1.columns else None
-                )
-                #logging.info('df_merged_pm1: %s',df_merged_pm1)
-                #from collections import defaultdict
-
-                # df_merged_pm1 must contain: reach_id, links (where links is a list of urls or NaN)
-                out = defaultdict(set)
-                
-                for rid, links in zip(df_merged_pm1["reach_id"], df_merged_pm1["links"]):
-                    if isinstance(links, list) and len(links) > 0:
-                        for link in links:
-                            out[link].add(str(rid))
-                
-                # Convert sets to sorted lists (optional)
-                bands_like_dict = {link: sorted(list(rids)) for link, rids in out.items()}
-
-
-                chunk_num += 1
-                end_time = time.time()
-                logging.info(f"Execution time: %s seconds to process chunk", end_time - start_time)
-                write_json(bands_like_dict, os.path.join(outdir, f'{cont}_hls_datefilt2_list_chunk_{chunk_num}_time_{int(end_time - start_time)}.json'))
+                    )
+                    df_exploded_bands=bands_agg
+                    # bad = (df_save_sorted
+                    #        .groupby("reach_id")["date"]
+                    #        .apply(lambda s: not s.is_monotonic_increasing))
+                    
+                    # print("Any reach_id groups not sorted?:", bad.any())
+                    # if bad.any():
+                    #    print("Example bad reach_ids:", bad[bad].index[:10].tolist())
+                    #breakpoint()
+                    # print(df_save_sorted[["reach_id","date"]].head(15))
+    
+                    # print(df_save_sorted[["reach_id","date"]].tail(15))
+    
+                    # print(df_save_sorted.dtypes)
+                    def clean_reach_id(x):
+                        try:
+                            if pd.isna(x):
+                                return None
+                            return str(int(float(x)))  # 57208000161.0
+                        except Exception:
+                            return str(x).strip()
+                    
+                    # Clean reach IDs
+                    #df_exploded_save["reach_id"] = df_exploded_save["reach_id"].apply(clean_reach_id)
+                    #df_exploded_bands["reach_id"] = df_exploded_bands["reach_id"].apply(clean_reach_id)
+                    
+                    # Make sure dates are datetimes
+                    df_exploded_save["date"] = pd.to_datetime(df_exploded_save["date"], errors="coerce").dt.normalize()
+                    df_exploded_bands["date"] = pd.to_datetime(df_exploded_bands["date"], errors="coerce").dt.normalize()
+    
+                    #  drop NaT + missing keys on BOTH sides
+                    df_exploded_save = df_exploded_save.dropna(subset=["reach_id", "date"]).copy()
+                    df_exploded_bands = df_exploded_bands.dropna(subset=["reach_id", "date"]).copy()
+                    test=df_exploded_save[df_exploded_save['reach_id']==ridtest]
+                    #logging.info('r2: %s',test)
+                    # Sort in required order 
+                    df_save_sorted = df_exploded_save.sort_values(["reach_id", "date"], kind="mergesort").reset_index(drop=True)
+                    df_bands_sorted = df_exploded_bands.sort_values(["reach_id", "date"], kind="mergesort").reset_index(drop=True)
+                    test=df_save_sorted[df_save_sorted['reach_id']==ridtest]
+                    #logging.info('r3: %s',test)
+                    # check monotonic within each reach_id on sides
+                    bad_left = df_save_sorted.groupby("reach_id")["date"].apply(lambda s: not s.is_monotonic_increasing)
+                    bad_right = df_bands_sorted.groupby("reach_id")["date"].apply(lambda s: not s.is_monotonic_increasing)
+                    
+                    # print("bad_left groups:", int(bad_left.sum()))
+                    # print("bad_right groups:", int(bad_right.sum()))
+                    # if bad_left.any():
+                    #     print("example bad_left reach_ids:", bad_left[bad_left].index[:5].tolist())
+                    # if bad_right.any():
+                    #     print("example bad_right reach_ids:", bad_right[bad_right].index[:5].tolist())
+                    # print(df_save_sorted["date"].isna().sum(), df_bands_sorted["date"].isna().sum())
+                    # print(df_save_sorted[["reach_id","date"]].head(5))
+                    # print(df_save_sorted[["reach_id","date"]].tail(5))
+    
+                    # Merge 1 day
+                    # df_merged_pm1 = pd.merge_asof(
+                    #     df_save_sorted,
+                    #     df_bands_sorted,
+                    #     on="date",
+                    #     by="reach_id",
+                    #     direction="nearest",
+                    #     tolerance=pd.Timedelta(days=1),
+                    # )
+    
+                    # df_save_sorted and df_bands_sorted must already be cleaned, datetime, and sorted by reach_id/date
+                    # (the ones you printed from)
+                    
+                    # Index right side by reach_id for fast lookup
+                    bands_by_reach = {rid: g.sort_values("date") for rid, g in df_bands_sorted.groupby("reach_id", sort=False)}
+                    #logging.info('bands_by_reach: %s',bands_by_reach)
+                    
+                    test=df_save_sorted[df_save_sorted['reach_id']==ridtest]
+                    #logging.info('r: %s',test)
+                    
+                    merged_parts = []
+                    
+                    for rid, left_g in df_save_sorted.groupby("reach_id", sort=False):
+                        right_g = bands_by_reach.get(rid)
+                        #logging.info('rid: %s',rid)
+                        #if rid == 51111100013:
+                        #    logging.info('rid: %s',rid)
+                        #    logging.info('right_g: %s',right_g)
+                        #    logging.info('left_g: %s',left_g)
+                        #    #logging.info('rid: %s',rid)
+                        #if right_g is None:
+                        #    # no bands for this reach -> keep left rows with NaNs on right columns
+                        #    merged_parts.append(left_g.assign(links=pd.NA))
+                        #    continue
+                        if right_g is not None:
+                            logging.info('rid: %s',rid)
+                            #logging.info('right_g: %s',right_g)
+                            left_g = left_g.sort_values("date")
+                            right_g = right_g.sort_values("date")
+                            #logging.info('left_g: %s',left_g)
+                            m = pd.merge_asof(
+                                left_g,
+                                right_g,
+                                on="date",
+                                direction="nearest",
+                                tolerance=pd.Timedelta(days=1),
+                                suffixes=("", "_bands"),
+                            )
+                            #logging.info('m: %s',m)
+                            sumnlinks=np.sum(m['n_links'])
+                            logging.info('sumnlinks: %s',sumnlinks)
+                            merged_parts.append(m)
+                    
+                    df_merged_pm1 = pd.concat(merged_parts, ignore_index=True)
+    
+                    sumnlinks=np.sum(df_merged_pm1['n_links'])
+                    #logging.info('sumnlinks: %s',sumnlinks)
+    
+                   # breakpoint()
+                    # how far apart the match was
+                    df_merged_pm1["date_diff_days"] = (
+                        (df_merged_pm1["date"] - df_merged_pm1["date_bands"]).dt.days #positive - Q is later, negative - SSC is later
+                        if "date_bands" in df_merged_pm1.columns else None
+                    )
+                    #logging.info('df_merged_pm1: %s',df_merged_pm1)
+                    #from collections import defaultdict
+    
+                    # df_merged_pm1 must contain: reach_id, links (where links is a list of urls or NaN)
+                    out = defaultdict(set)
+                    
+                    for rid, links in zip(df_merged_pm1["reach_id"], df_merged_pm1["links"]):
+                        if isinstance(links, list) and len(links) > 0:
+                            for link in links:
+                                out[link].add(str(rid))
+                    
+                    # Convert sets to sorted lists (optional)
+                    bands_like_dict = {link: sorted(list(rids)) for link, rids in out.items()}
+    
+    
+                    chunk_num += 1
+                    end_time = time.time()
+                    logging.info(f"Execution time: %s seconds to process chunk", end_time - start_time)
+                    write_json(bands_like_dict, os.path.join(outdir, f'{cont}_swordv17c_hls_list_chunk_{chunk_num}_time_{int(end_time - start_time)}.json'))
         else:
             logging.info("No reaches located for continent: %s", cont.upper())
         logging.info("All chunks processed — script completed.")
