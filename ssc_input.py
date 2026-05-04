@@ -257,7 +257,7 @@ def get_reach_node_cords(sword_path, reach_id, cont):
             rootgrp = ncf.Dataset(sword_path, "r", format="NETCDF4")
             break
         except:
-            sleep(randint(1,20))
+            #sleep(randint(1,20))
             pass
     
     node_ids_indexes = np.where(rootgrp.groups['nodes'].variables['reach_id'][:].data.astype('U') == str(reach_id))
@@ -537,7 +537,7 @@ def main():
             cont_number=reach_index
         
         #sword_path =  "D:/SWORD/SWORD_v17b_netcdf/netcdf/"+cont+"_sword_v17b.nc"
-        sword_path =os.path.join(indir,'sword', f'{cont}_sword_v17c.nc')
+        sword_path =os.path.join(indir,'sword', f'{cont}_sword_v17.nc')
         #sword_path="D:/Luisa/data/SWOT-Confluence-Offline/confluence_runTest/runTest_mnt/output/sos/"+cont+"_sword_v17_SOS_results.nc"
         #sword_path="D:/SWORD/SWORD_v16_netcdf/SWORD_v16_netcdf/netcdf/"+cont+"_sword_v16.nc"#"D:/SWORD/SWORD_v16_shp/oc_shp_merged/union/sword_v16_oc.shp"
         #os.path.join(indir, 'sword', f'{cont}_sword_v16_patch.nc')
@@ -643,8 +643,8 @@ def main():
                     #df_exploded_bands["reach_id"] = df_exploded_bands["reach_id"].apply(clean_reach_id)
                     
                     # Make sure dates are datetimes
-                    df_exploded_save["date"] = pd.to_datetime(df_exploded_save["date"], errors="coerce").dt.normalize()
-                    df_exploded_bands["date"] = pd.to_datetime(df_exploded_bands["date"], errors="coerce").dt.normalize()
+                    df_exploded_save["date"] = pd.to_datetime(df_exploded_save["date"], errors="coerce").dt.normalize().astype("datetime64[us]")
+                    df_exploded_bands["date"] = pd.to_datetime(df_exploded_bands["date"], errors="coerce").dt.normalize().astype("datetime64[us]")
     
                     #  drop NaT + missing keys on BOTH sides
                     df_exploded_save = df_exploded_save.dropna(subset=["reach_id", "date"]).copy()
