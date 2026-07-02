@@ -27,11 +27,23 @@ resource "aws_batch_job_definition" "generate_batch_jd_ssc_input" {
       sourceVolume  = "input",
       containerPath = "/mnt/input"
       readOnly      = false
+    },
+    {
+      sourceVolume  = "output",
+      containerPath = "/mnt/output"
+      readOnly      = true
     }]
     volumes = [{
       name = "input"
       efsVolumeConfiguration = {
         fileSystemId  = var.efs_file_system_ids["input"]
+        rootDirectory = "/"
+      }
+    },
+    {
+      name = "output"
+      efsVolumeConfiguration = {
+        fileSystemId  = var.efs_file_system_ids["output"]
         rootDirectory = "/"
       }
     }]

@@ -378,6 +378,13 @@ def get_args():
                         default=-235
                         )
 
+    parser.add_argument('-c',
+                        '--continent',
+                        help='continent abbreviation to process',
+                        choices=['af', 'eu', 'as', 'oc', 'na', 'sa'],
+                        default=None
+                        )
+
     parser.add_argument('-w',
                         '--swotfile',
                         help='where to find the swot file',
@@ -438,16 +445,28 @@ def main():
     run_globe = args.run_globe
     starting_chunk = args.starting_chunk
     swotfile=args.swotfile
+    continent_arg = args.continent
     for arg, val in args.__dict__.items():
         logging.info("%s: %s", arg, val)
     #index=4 # hard coded, for test
     #index=7 #also hard coded
     #outdir="D:/Luisa/data/ssc_input_test_2026_02_04"# hard coded, for test
     ridtest=73150600111 #51111100013
-    if index == -235 or None:
+
+    CONT_TO_INDICES = {
+        'af': [1],
+        'eu': [2],
+        'as': [3, 4],
+        'oc': [5],
+        'sa': [6],
+        'na': [7, 8, 9],
+    }
+
+    if continent_arg is not None:
+        index_range = CONT_TO_INDICES[continent_arg]
+    elif index == -235 or None:
         # index = int(os.environ.get("AWS_BATCH_JOB_ARRAY_INDEX"))
         index_range = range(0,8)
-    
     else:
         index_range = range(index, index+1)
         
@@ -488,10 +507,23 @@ def main():
     df_save=df#.dropna(subset='Q')
     df_exploded_save=df_save.explode(["date", "Q"])
 
+    
+
+
     df_exploded_save=df_exploded_save.dropna(subset='Q')
     df_exploded_save = df_exploded_save[df_exploded_save["date"] >= 0].copy()
     #df_exploded_save = df_exploded_save[df_exploded_save["date"] >= 0].copy()
     
+
+    df_exploded_save["date"] = (
+                         pd.to_datetime("2000-01-01")
+                         + pd.to_timedelta(df_exploded_save["date"].astype('int64'), unit="s")
+                     )
+    #df_exploded_save["date"] = df_exploded_save["date"].dt.normalize()
+    df_exploded_save["date"] = pd.to_datetime(df_exploded_save["date"]).dt.normalize()
+    #df_exploded_bands["date"] = pd.to_datetime(df_exploded_bands["date"]).dt.normalize()
+
+
     test=df_exploded_save[df_exploded_save['reach_id']==ridtest]
     #logging.info('r5: %s',test)
     
@@ -503,11 +535,12 @@ def main():
         #cont, cont_number = get_cont_info(index = index, indir = indir)
         #cont='oc' # hard coded, for test
         #cont_number=5 # hard coded, for test
-        #logging.info('processing %s', cont)
+        logging.info('processing %d', index)
         # there is no point in processing just one continent. Process all.
         
         #please replace this part using the right continent indexes
-        reach_index=index+1
+        # Replaced index+1 to simply index- we shouldn't be 0 basing that. And we can't guarantee that the order of the indicies would map to specific continents. We should be explicit in which index means which continent.
+        reach_index=index
         if reach_index==1:
             cont='af'
             cont_number=reach_index
@@ -596,12 +629,13 @@ def main():
                     
                     
                     #logging.info('example date v2: %s',df_exploded_save["date"][1])
-                    df_exploded_save["date"] = (
-                         pd.to_datetime("2000-01-01")
-                         + pd.to_timedelta(df_exploded_save["date"].astype('int64'), unit="S")
-                     )
-                    #df_exploded_save["date"] = df_exploded_save["date"].dt.normalize()
-                    df_exploded_save["date"] = pd.to_datetime(df_exploded_save["date"]).dt.normalize()
+
+                    # df_exploded_save["date"] = (
+                    #      pd.to_datetime("2000-01-01")
+                    #      + pd.to_timedelta(df_exploded_save["date"].astype('int64'), unit="s")
+                    #  )
+                    # #df_exploded_save["date"] = df_exploded_save["date"].dt.normalize()
+                    # df_exploded_save["date"] = pd.to_datetime(df_exploded_save["date"]).dt.normalize()
                     df_exploded_bands["date"] = pd.to_datetime(df_exploded_bands["date"]).dt.normalize()
                     
                     test=df_exploded_save[df_exploded_save['reach_id']==ridtest]
@@ -752,7 +786,7 @@ def main():
                     chunk_num += 1
                     end_time = time.time()
                     logging.info(f"Execution time: %s seconds to process chunk", end_time - start_time)
-                    write_json(bands_like_dict, os.path.join(outdir, f'{cont}_swordv17c_hls_list_chunk_{chunk_num}_time_{int(end_time - start_time)}.json'))
+                    write_json(bands_like_dict, os.path.join(outdir, f'{cont}_swordv17c_hls_list_chunk_{chunk_num}_time_{int(end_time)}.json'))
         else:
             logging.info("No reaches located for continent: %s", cont.upper())
         logging.info("All chunks processed — script completed.")
